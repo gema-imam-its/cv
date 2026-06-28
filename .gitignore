@@ -1,0 +1,21 @@
+# Virtual Environments
+venv/
+venv-win/
+proto-2/venv/
+.venv/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Log Files & Data Sessions
+logs/*.csv
+logs/*.json
+logs/.gitkeep
+
+# IDE / System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
