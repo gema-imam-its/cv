@@ -1,0 +1,26 @@
+# ============================================================
+# GEMA Imam — Sholat Movement Tracking
+# Requirements / Dependencies
+# ============================================================
+#
+# Install:
+#   pip install -r requirements.txt
+#
+# Untuk Orange Pi 4 Pro (ARM64), mediapipe>=0.10.x sudah support ARM64.
+# Jika pip tidak menemukan versi ARM64, coba:
+#   pip install mediapipe --extra-index-url https://google-coral.github.io/py-repo/
+
+# Core computer vision & pose estimation
+opencv-python>=4.8.0
+mediapipe==0.10.14
+
+# Numerical computation (sudah ter-include saat install mediapipe, tapi eksplisit lebih aman)
+numpy>=1.24.0
+
+# Tidak ada dependency lain yang dibutuhkan:
+# - csv    → sudah built-in Python
+# - json   → sudah built-in Python
+# - os     → sudah built-in Python
+# - time   → sudah built-in Python
+# - datetime → sudah built-in Python
+# - pathlib  → sudah built-in Python

@@ -1,0 +1,12 @@
+{
+  "_comment": "File ini diisi otomatis oleh mode kalibrasi. Hapus isinya untuk kalibrasi ulang.",
+  "calibrated": false,
+  "calibrated_at": null,
+  "platform": null,
+  "shoulder_y": null,
+  "hip_y": null,
+  "knee_y": null,
+  "body_height_ref": null,
+  "hip_angle_standing": null,
+  "thresholds_override": {}
+}
