@@ -204,44 +204,41 @@ class LANDMARK:
 # ─────────────────────────────────────────────────────────────
 class POSE:
     """Nama string untuk setiap state/pose sholat."""
-    UNKNOWN        = "UNKNOWN"
-    QIYAM          = "QIYAM"          # Berdiri tegak (Niat di rakaat 1)
-    TAKBIR         = "TAKBIR"         # Takbiratul Ihram (hanya rakaat 1)
-    SEDEKAP        = "SEDEKAP"        # Bersedekap (Iftitah, Al-Fatihah, Surat)
-    RUKU           = "RUKU"           # Rukuk
-    ITIDAL         = "ITIDAL"         # I'tidal (berdiri setelah ruku')
-    SUJUD          = "SUJUD"          # Sujud (ke-1 atau ke-2)
-    JALSA          = "JALSA"          # Duduk antara dua sujud
-    TASYAHUD_AWAL  = "TASYAHUD_AWAL"  # Duduk tasyahud awal (rakaat ke-2 di sholat 3-4 rakaat)
-    TASYAHUD_AKHIR = "TASYAHUD_AKHIR" # Duduk tasyahud akhir (rakaat terakhir)
-    SALAM_KANAN    = "SALAM_KANAN"    # Menoleh ke kanan
-    SALAM_KIRI     = "SALAM_KIRI"     # Menoleh ke kiri
-    SELESAI        = "SELESAI"        # Sholat selesai
+    UNKNOWN                    = "UNKNOWN"
+    BERDIRI_TEGAK              = "BERDIRI_TEGAK"              # Berdiri Tegak / Niat
+    TAKBIRATUL_IHRAM           = "TAKBIRATUL_IHRAM"           # Takbiratul Ihram (Allahu Akbar)
+    BERSEDEKAP                 = "BERSEDEKAP"                 # Bersedekap (Membaca Al-Fatihah, dll)
+    RUKUK                      = "RUKUK"                      # Rukuk
+    ITIDAL                     = "ITIDAL"                     # I'tidal (Tahmid / Doa I'tidal)
+    SUJUD_PERTAMA              = "SUJUD_PERTAMA"              # Sujud Pertama
+    DUDUK_DI_ANTARA_DUA_SUJUD  = "DUDUK_DI_ANTARA_DUA_SUJUD"  # Duduk di Antara Dua Sujud
+    SUJUD_KEDUA                = "SUJUD_KEDUA"                # Sujud Kedua
+    DUDUK_TASYAHUD_AWAL        = "DUDUK_TASYAHUD_AWAL"        # Duduk Tasyahud Awal
+    DUDUK_TASYAHUD_AKHIR       = "DUDUK_TASYAHUD_AKHIR"       # Duduk Tasyahud Akhir
+    SALAM_KE_KANAN             = "SALAM_KE_KANAN"             # Salam ke Kanan
+    SALAM_KE_KIRI              = "SALAM_KE_KIRI"              # Salam ke Kiri
+    SELESAI                    = "SELESAI"                    # Selesai
 
-    # Urutan valid dalam 1 rakaat (rakaat pertama)
-    RAKAAT_1_SEQUENCE = [
-        QIYAM, TAKBIR, SEDEKAP, RUKU, ITIDAL, SUJUD, JALSA, SUJUD,
-    ]
-    # Urutan valid dalam rakaat ke-2 dst. (tidak ada TAKBIR)
-    RAKAAT_N_SEQUENCE = [
-        QIYAM, SEDEKAP, RUKU, ITIDAL, SUJUD, JALSA, SUJUD,
-    ]
+    # Penamaan kelas fisik pembantu (yang dikembalikan oleh pose_classifier)
+    SUJUD                      = "SUJUD"                      # Fisik Sujud
+    JALSA                      = "JALSA"                      # Fisik Duduk
 
     # Deskripsi UI yang ditampilkan ke pengguna
     DISPLAY_NAME = {
-        UNKNOWN:        "Tidak Terdeteksi",
-        QIYAM:          "Qiyam (Berdiri)",
-        TAKBIR:         "Takbiratul Ihram",
-        SEDEKAP:        "Bersedekap",
-        RUKU:           "Ruku'",
-        ITIDAL:         "I'tidal",
-        SUJUD:          "Sujud",
-        JALSA:          "Duduk Antara Sujud",
-        TASYAHUD_AWAL:  "Tasyahud Awal",
-        TASYAHUD_AKHIR: "Tasyahud Akhir",
-        SALAM_KANAN:    "Salam ke Kanan",
-        SALAM_KIRI:     "Salam ke Kiri",
-        SELESAI:        "Selesai ✓",
+        UNKNOWN:                    "Tidak Terdeteksi",
+        BERDIRI_TEGAK:              "Berdiri Tegak",
+        TAKBIRATUL_IHRAM:           "Takbiratul Ihram",
+        BERSEDEKAP:                 "Bersedekap",
+        RUKUK:                      "Rukuk",
+        ITIDAL:                     "I'tidal",
+        SUJUD_PERTAMA:              "Sujud Pertama",
+        DUDUK_DI_ANTARA_DUA_SUJUD:  "Duduk di Antara Dua Sujud",
+        SUJUD_KEDUA:                "Sujud Kedua",
+        DUDUK_TASYAHUD_AWAL:        "Duduk Tasyahud Awal",
+        DUDUK_TASYAHUD_AKHIR:       "Duduk Tasyahud Akhir",
+        SALAM_KE_KANAN:             "Salam ke Kanan",
+        SALAM_KE_KIRI:              "Salam ke Kiri",
+        SELESAI:                    "Selesai ✓",
     }
 
 
@@ -250,33 +247,33 @@ class POSE:
 # ─────────────────────────────────────────────────────────────
 # Audio yang diputar saat MEMASUKI suatu state (bacaan utama di posisi tersebut)
 AUDIO_STATE_MAP = {
-    # Rakaat pertama: Qiyam = niat (file niat bisa berbeda per sholat, dihandle di main.py)
-    POSE.TAKBIR:         "takbiratul-ihram.WAV",   # "Allahu Akbar"
-    POSE.SEDEKAP:        "iftitah.WAV",            # Doa Iftitah (hanya rakaat 1, lihat logic di state_machine)
-    POSE.RUKU:           "ruku.WAV",               # Tasbih Rukuk
-    POSE.ITIDAL:         "itidal.WAV",             # Tahmid / Doa I'tidal
-    POSE.SUJUD:          "sujud.WAV",              # Tasbih Sujud
-    POSE.JALSA:          "iftirasy.WAV",           # Doa Duduk Antara Dua Sujud
-    POSE.TASYAHUD_AWAL:  "tasyahud-awal.WAV",     # Doa Tasyahud Awal
-    POSE.TASYAHUD_AKHIR: "tasyahud-akhir.WAV",    # Doa Tasyahud Akhir
-    POSE.SALAM_KANAN:    "salam.WAV",              # "Assalamu'alaikum..."
-    POSE.SALAM_KIRI:     "salam.WAV",              # "Assalamu'alaikum..."
+    POSE.TAKBIRATUL_IHRAM:          "takbiratul-ihram.WAV",   # "Allahu Akbar" (Takbiratul Ihram)
+    POSE.BERSEDEKAP:                "iftitah.WAV",            # Doa Iftitah (hanya rakaat 1, lihat logic)
+    POSE.RUKUK:                     "ruku.WAV",               # Doa/Tasbih Rukuk
+    POSE.ITIDAL:                    "itidal.WAV",             # Tahmid / Doa I'tidal
+    POSE.SUJUD_PERTAMA:             "sujud.WAV",              # Doa/Tasbih Sujud 1
+    POSE.DUDUK_DI_ANTARA_DUA_SUJUD: "iftirasy.WAV",           # Doa Duduk di Antara Dua Sujud
+    POSE.SUJUD_KEDUA:               "sujud.WAV",              # Doa/Tasbih Sujud 2
+    POSE.DUDUK_TASYAHUD_AWAL:       "tasyahud-awal.WAV",      # Doa Tasyahud Awal
+    POSE.DUDUK_TASYAHUD_AKHIR:      "tasyahud-akhir.WAV",     # Doa Tasyahud Akhir
+    POSE.SALAM_KE_KANAN:            "salam.WAV",              # Salam Kanan
+    POSE.SALAM_KE_KIRI:             "salam.WAV",              # Salam Kiri
 }
 
-# Audio TRANSISI yang diputar saat BERGERAK MENUJU state berikutnya
-# Key = (from_state, to_state), Value = nama file audio
+# Audio TRANSISI yang diputar saat BERGERAK MENUJU state berikutnya (Takbir Intiqal / Tasmi')
 AUDIO_TRANSITION_MAP = {
     # Takbir Intiqal — diucapkan saat turun/naik antar gerakan
-    (POSE.SEDEKAP, POSE.RUKU):           "takbir.WAV",    # Turun ke Rukuk
-    (POSE.ITIDAL,  POSE.SUJUD):          "takbir.WAV",    # Turun ke Sujud 1
-    (POSE.SUJUD,   POSE.JALSA):          "takbir.WAV",    # Bangkit dari Sujud 1
-    (POSE.JALSA,   POSE.SUJUD):          "takbir.WAV",    # Turun ke Sujud 2
-    (POSE.SUJUD,   POSE.QIYAM):          "takbir.WAV",    # Bangkit berdiri ke rakaat baru
-    (POSE.SUJUD,   POSE.TASYAHUD_AWAL):  "takbir.WAV",    # Duduk tasyahud awal
-    (POSE.SUJUD,   POSE.TASYAHUD_AKHIR): "takbir.WAV",    # Duduk tasyahud akhir
+    (POSE.BERSEDEKAP, POSE.RUKUK):                  "takbir.WAV",    # Turun ke Rukuk
+    (POSE.ITIDAL,  POSE.SUJUD_PERTAMA):             "takbir.WAV",    # Turun ke Sujud Pertama
+    (POSE.SUJUD_PERTAMA, POSE.DUDUK_DI_ANTARA_DUA_SUJUD): "takbir.WAV", # Bangkit dari Sujud Pertama
+    (POSE.DUDUK_DI_ANTARA_DUA_SUJUD, POSE.SUJUD_KEDUA): "takbir.WAV",  # Turun ke Sujud Kedua
+    (POSE.SUJUD_KEDUA, POSE.BERDIRI_TEGAK):          "takbir.WAV",    # Bangkit berdiri ke rakaat berikutnya
+    (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AWAL):   "takbir.WAV",    # Duduk tasyahud awal
+    (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AKHIR):  "takbir.WAV",    # Duduk tasyahud akhir
+    (POSE.DUDUK_TASYAHUD_AWAL, POSE.BERDIRI_TEGAK):  "takbir.WAV",    # Bangkit dari tasyahud awal ke rakaat berikutnya
 
     # Tasmi' — diucapkan saat bangkit dari Rukuk
-    (POSE.RUKU,    POSE.ITIDAL):          "tasmi.WAV",     # "Sami'allahu liman hamidah"
+    (POSE.RUKUK,    POSE.ITIDAL):                   "tasmi.WAV",     # "Sami'allahu liman hamidah"
 }
 
 # Audio tambahan per sholat (niat, Al-Fatihah, Surat)

@@ -343,7 +343,7 @@ class GemaImamApp:
                                     self.audio_player.play(audio_trans)
                                     
                                 # Putar audio bacaan di dalam posisi tersebut (State Audio)
-                                if to_st == POSE.SEDEKAP:
+                                if to_st == POSE.BERSEDEKAP:
                                     if transition_info["is_first_sedekap"]:
                                         self.audio_player.play("iftitah.WAV")
                                     self.audio_player.play("alfatihah.WAV")

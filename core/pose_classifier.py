@@ -110,14 +110,14 @@ def classify_pose(landmarks):
     # Ciri khas: Pinggul tertekuk mendekati 90 derajat, lutut tetap lurus
     if (THRESHOLDS["HIP_RUKU_MIN"] <= feat["hip_angle"] <= THRESHOLDS["HIP_RUKU_MAX"] and 
             feat["knee_angle"] > THRESHOLDS["KNEE_STRAIGHT_MIN"]):
-        return POSE.RUKU
+        return POSE.RUKUK
         
     # ── D. SALAM (Menoleh Kanan / Kiri saat Berdiri/Duduk) ──
     # Catatan: Salam terdeteksi dari simpangan kepala
     if feat["head_offset_x"] > THRESHOLDS["SALAM_HEAD_OFFSET_THRESHOLD"]:
-        return POSE.SALAM_KANAN  # Salam (arah kanan)
+        return POSE.SALAM_KE_KANAN  # Salam (arah kanan)
     elif feat["head_offset_x"] < -THRESHOLDS["SALAM_HEAD_OFFSET_THRESHOLD"]:
-        return POSE.SALAM_KIRI   # Salam (arah kiri)
+        return POSE.SALAM_KE_KIRI   # Salam (arah kiri)
         
     # ── E. POSE BERDIRI (Takbir / Sedekap / Qiyam) ──
     # Jika pinggul dan lutut dalam posisi lurus/tegak
@@ -128,16 +128,16 @@ def classify_pose(landmarks):
         if feat["wrist_l_above_shoulder"] and feat["wrist_r_above_shoulder"]:
             # Validasi tambahan: sudut siku terangkat / terbuka
             if feat["arm_angle"] > THRESHOLDS["TAKBIR_ARM_ANGLE_MIN"]:
-                return POSE.TAKBIR
+                return POSE.TAKBIRATUL_IHRAM
                 
         # 2. Bersedekap: Tangan di bawah bahu, di atas pinggul, dan berdekatan secara X
         if (feat["wrist_l_below_shoulder"] and feat["wrist_r_below_shoulder"] and 
                 feat["wrist_l_above_hip"] and feat["wrist_r_above_hip"] and 
                 feat["wrist_dist_x"] < THRESHOLDS["SEDEKAP_HAND_MAX_DIST_X"]):
-            return POSE.SEDEKAP
+            return POSE.BERSEDEKAP
             
         # 3. Qiyam: Berdiri tegak normal (tangan ke bawah)
-        return POSE.QIYAM
+        return POSE.BERDIRI_TEGAK
         
     # Jika tidak memenuhi syarat gerakan apapun
     return POSE.UNKNOWN
