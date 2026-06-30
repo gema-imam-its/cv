@@ -123,17 +123,18 @@ def draw_hud(frame, state, active_prayer, rakaat, fps, hold_counter, max_hold):
     # Tentukan warna teks pose
     pose_colors = {
         POSE.UNKNOWN: (150, 150, 150),
-        POSE.QIYAM: (255, 255, 200),
-        POSE.TAKBIR: (180, 255, 180),
-        POSE.SEDEKAP: (180, 255, 255),
-        POSE.RUKU: (255, 220, 180),
+        POSE.BERDIRI_TEGAK: (255, 255, 200),
+        POSE.TAKBIRATUL_IHRAM: (180, 255, 180),
+        POSE.BERSEDEKAP: (180, 255, 255),
+        POSE.RUKUK: (255, 220, 180),
         POSE.ITIDAL: (230, 230, 230),
-        POSE.SUJUD: (180, 180, 255),
-        POSE.JALSA: (255, 180, 255),
-        POSE.TASYAHUD_AWAL: (255, 150, 200),
-        POSE.TASYAHUD_AKHIR: (255, 100, 180),
-        POSE.SALAM_KANAN: (100, 255, 255),
-        POSE.SALAM_KIRI: (100, 255, 255),
+        POSE.SUJUD_PERTAMA: (180, 180, 255),
+        POSE.SUJUD_KEDUA: (180, 180, 255),
+        POSE.DUDUK_DI_ANTARA_DUA_SUJUD: (255, 180, 255),
+        POSE.DUDUK_TASYAHUD_AWAL: (255, 150, 200),
+        POSE.DUDUK_TASYAHUD_AKHIR: (255, 100, 180),
+        POSE.SALAM_KE_KANAN: (100, 255, 255),
+        POSE.SALAM_KE_KIRI: (100, 255, 255),
         POSE.SELESAI: (100, 255, 100)
     }
     pose_color = pose_colors.get(state, (255, 255, 255))
