@@ -87,22 +87,45 @@ class AudioPlayer:
                 pass
             self.active_process = None
                 
+    @staticmethod
+    def _find_player():
+        """Mencari audio player yang tersedia di sistem."""
+        for player in ["aplay", "paplay", "ffplay", "mpg123"]:
+            result = subprocess.run(["which", player], capture_output=True, text=True)
+            if result.returncode == 0:
+                return player.strip()
+        return None
+
     def _worker(self):
+        player = self._find_player()
+        if player:
+            print(f"[AUDIO] Menggunakan player: {player}")
+        else:
+            print("[AUDIO WARNING] Tidak ada audio player yang ditemukan (aplay/paplay/ffplay). Suara dinonaktifkan.")
+
         while True:
             try:
                 filepath, delay = self.queue.get()
                 if delay > 0:
                     time.sleep(delay)
-                
+
                 if sys.platform.startswith("win"):
                     import winsound
                     winsound.PlaySound(filepath, winsound.SND_FILENAME)
                 elif sys.platform.startswith("darwin"):
                     self.active_process = subprocess.Popen(["afplay", filepath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     self.active_process.wait()
-                else:
-                    self.active_process = subprocess.Popen(["aplay", filepath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                elif player:
+                    if player == "ffplay":
+                        cmd = ["ffplay", "-nodisp", "-autoexit", filepath]
+                    elif player == "mpg123":
+                        cmd = ["mpg123", "-q", filepath]
+                    else:
+                        cmd = [player, filepath]
+                    self.active_process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     self.active_process.wait()
+                else:
+                    pass  # Tidak ada player, lewati tanpa error
             except Exception as e:
                 print(f"[AUDIO ERROR] Gagal memutar {filepath if 'filepath' in locals() else ''}: {e}")
             finally:
@@ -189,12 +212,11 @@ class GemaImamApp:
         try:
             with open(csv_filename, "w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(["Rakaat", "State/Pose", "Sujud_Ke", "Waktu"])
+                writer.writerow(["Rakaat", "State/Pose", "Waktu"])
                 for step in self.state_machine.completed_steps:
                     writer.writerow([
                         step["rakaat"],
                         step["state"],
-                        step["sujud_index"] if step["sujud_index"] is not None else "",
                         datetime.now().strftime("%H:%M:%S")
                     ])
             print(f"[LOGGER] Log CSV detail disimpan di: {csv_filename}")
