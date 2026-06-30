@@ -115,9 +115,9 @@ def classify_pose(landmarks):
     # ── D. SALAM (Menoleh Kanan / Kiri saat Berdiri/Duduk) ──
     # Catatan: Salam terdeteksi dari simpangan kepala
     if feat["head_offset_x"] > THRESHOLDS["SALAM_HEAD_OFFSET_THRESHOLD"]:
-        return POSE.SALAM  # Diterjemahkan sebagai Salam (arah kanan)
+        return POSE.SALAM_KANAN  # Salam (arah kanan)
     elif feat["head_offset_x"] < -THRESHOLDS["SALAM_HEAD_OFFSET_THRESHOLD"]:
-        return POSE.SALAM  # Diterjemahkan sebagai Salam (arah kiri)
+        return POSE.SALAM_KIRI   # Salam (arah kiri)
         
     # ── E. POSE BERDIRI (Takbir / Sedekap / Qiyam) ──
     # Jika pinggul dan lutut dalam posisi lurus/tegak

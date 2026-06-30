@@ -19,6 +19,10 @@ import csv
 from datetime import datetime
 import cv2
 import mediapipe as mp
+import numpy as np
+import queue
+import subprocess
+import threading
 
 from config import (
     ACTIVE_PROFILE,
@@ -30,6 +34,10 @@ from config import (
     LANDMARK,
     CALIBRATION_FILE,
     LOGS_DIR,
+    AUDIO_DIR,
+    AUDIO_STATE_MAP,
+    AUDIO_TRANSITION_MAP,
+    AUDIO_EXTRA,
     KEY_QUIT,
     KEY_RESET,
     KEY_DEBUG,
@@ -44,10 +52,68 @@ import visualizer
 # Cek support display GUI
 HAS_DISPLAY = "DISPLAY" in os.environ or os.name == "nt"
 
+class AudioPlayer:
+    def __init__(self):
+        self.queue = queue.Queue()
+        self.active_process = None
+        self.thread = threading.Thread(target=self._worker, daemon=True)
+        self.thread.start()
+        
+    def play(self, filename, delay=0.0):
+        """Menambahkan file audio ke dalam antrean untuk diputar secara berurutan."""
+        if not filename:
+            return
+        filepath = os.path.join(AUDIO_DIR, filename)
+        if not os.path.exists(filepath):
+            print(f"[AUDIO WARNING] Berkas tidak ditemukan: {filepath}")
+            return
+        self.queue.put((filepath, delay))
+        
+    def clear(self):
+        """Mengosongkan antrean audio dan menghentikan audio yang sedang diputar."""
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+            except queue.Empty:
+                break
+        if self.active_process:
+            try:
+                if sys.platform.startswith("win"):
+                    import winsound
+                    winsound.PlaySound(None, winsound.SND_PURGE)
+                else:
+                    self.active_process.terminate()
+            except Exception:
+                pass
+            self.active_process = None
+                
+    def _worker(self):
+        while True:
+            try:
+                filepath, delay = self.queue.get()
+                if delay > 0:
+                    time.sleep(delay)
+                
+                if sys.platform.startswith("win"):
+                    import winsound
+                    winsound.PlaySound(filepath, winsound.SND_FILENAME)
+                elif sys.platform.startswith("darwin"):
+                    self.active_process = subprocess.Popen(["afplay", filepath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.active_process.wait()
+                else:
+                    self.active_process = subprocess.Popen(["aplay", filepath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.active_process.wait()
+            except Exception as e:
+                print(f"[AUDIO ERROR] Gagal memutar {filepath if 'filepath' in locals() else ''}: {e}")
+            finally:
+                self.active_process = None
+                self.queue.task_done()
+
 class GemaImamApp:
     def __init__(self):
         self.active_prayer = "Subuh"
         self.state_machine = SholatStateMachine(self.active_prayer)
+        self.audio_player = AudioPlayer()
         self.debug_mode = False
         self.paused = False
         
@@ -67,6 +133,14 @@ class GemaImamApp:
         
         # Data logger
         self.start_timestamp = None
+
+    def play_niat_audio(self):
+        """Memutar audio niat sholat yang aktif."""
+        self.audio_player.clear()  # Bersihkan audio sebelumnya
+        if self.active_prayer == "Subuh":
+            self.audio_player.play(AUDIO_EXTRA["niat_subuh"])
+        else:
+            print(f"[AUDIO] Niat untuk sholat {self.active_prayer} tidak tersedia di folder audio.")
 
     def load_calibration(self):
         """Memuat data kalibrasi dari file jika tersedia."""
@@ -188,6 +262,7 @@ class GemaImamApp:
         
         # Mulai sesi logging
         self.start_session_logging()
+        self.play_niat_audio()
         
         frame_count = 0
         fps = 0.0
@@ -257,7 +332,26 @@ class GemaImamApp:
                         
                         # 2. Update state machine sholat
                         if not self.calibrating:
-                            self.state_machine.update(last_classified_pose)
+                            transition_info = self.state_machine.update(last_classified_pose)
+                            if transition_info:
+                                from_st = transition_info["from"]
+                                to_st = transition_info["to"]
+                                
+                                # Putar audio transisi (seperti Takbir Intiqal / Tasmi')
+                                audio_trans = AUDIO_TRANSITION_MAP.get((from_st, to_st))
+                                if audio_trans:
+                                    self.audio_player.play(audio_trans)
+                                    
+                                # Putar audio bacaan di dalam posisi tersebut (State Audio)
+                                if to_st == POSE.SEDEKAP:
+                                    if transition_info["is_first_sedekap"]:
+                                        self.audio_player.play("iftitah.WAV")
+                                    self.audio_player.play("alfatihah.WAV")
+                                    self.audio_player.play("al-ikhlas.WAV")
+                                else:
+                                    audio_state = AUDIO_STATE_MAP.get(to_st)
+                                    if audio_state:
+                                        self.audio_player.play(audio_state)
                         
                         # 3. Hitung fitur untuk debug sudut
                         last_features = get_pose_features(last_results.pose_landmarks)
@@ -329,10 +423,12 @@ class GemaImamApp:
                     key = cv2.waitKey(1) & 0xFF
                     if key == KEY_QUIT:
                         print("[INFO] Menutup program via keyboard shortcut.")
+                        self.audio_player.clear()
                         self.save_session_logs(force_cancel=True)
                         break
                     elif key == KEY_RESET:
                         self.state_machine.reset()
+                        self.play_niat_audio()
                     elif key == KEY_DEBUG:
                         self.debug_mode = not self.debug_mode
                         print(f"[INFO] Debug mode: {'AKTIF' if self.debug_mode else 'NONAKTIF'}")
@@ -350,6 +446,7 @@ class GemaImamApp:
                         if new_prayer != self.active_prayer:
                             self.active_prayer = new_prayer
                             self.state_machine = SholatStateMachine(new_prayer)
+                            self.play_niat_audio()
                             self.start_session_logging()
                 else:
                     # Headless Mode console logs

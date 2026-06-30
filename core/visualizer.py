@@ -132,7 +132,8 @@ def draw_hud(frame, state, active_prayer, rakaat, fps, hold_counter, max_hold):
         POSE.JALSA: (255, 180, 255),
         POSE.TASYAHUD_AWAL: (255, 150, 200),
         POSE.TASYAHUD_AKHIR: (255, 100, 180),
-        POSE.SALAM: (100, 255, 255),
+        POSE.SALAM_KANAN: (100, 255, 255),
+        POSE.SALAM_KIRI: (100, 255, 255),
         POSE.SELESAI: (100, 255, 100)
     }
     pose_color = pose_colors.get(state, (255, 255, 255))

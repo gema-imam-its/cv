@@ -205,17 +205,18 @@ class LANDMARK:
 class POSE:
     """Nama string untuk setiap state/pose sholat."""
     UNKNOWN        = "UNKNOWN"
-    QIYAM          = "QIYAM"
-    TAKBIR         = "TAKBIR"
-    SEDEKAP        = "SEDEKAP"
-    RUKU           = "RUKU"
-    ITIDAL         = "ITIDAL"
-    SUJUD          = "SUJUD"
-    JALSA          = "JALSA"
-    TASYAHUD_AWAL  = "TASYAHUD_AWAL"
-    TASYAHUD_AKHIR = "TASYAHUD_AKHIR"
-    SALAM          = "SALAM"
-    SELESAI        = "SELESAI"
+    QIYAM          = "QIYAM"          # Berdiri tegak (Niat di rakaat 1)
+    TAKBIR         = "TAKBIR"         # Takbiratul Ihram (hanya rakaat 1)
+    SEDEKAP        = "SEDEKAP"        # Bersedekap (Iftitah, Al-Fatihah, Surat)
+    RUKU           = "RUKU"           # Rukuk
+    ITIDAL         = "ITIDAL"         # I'tidal (berdiri setelah ruku')
+    SUJUD          = "SUJUD"          # Sujud (ke-1 atau ke-2)
+    JALSA          = "JALSA"          # Duduk antara dua sujud
+    TASYAHUD_AWAL  = "TASYAHUD_AWAL"  # Duduk tasyahud awal (rakaat ke-2 di sholat 3-4 rakaat)
+    TASYAHUD_AKHIR = "TASYAHUD_AKHIR" # Duduk tasyahud akhir (rakaat terakhir)
+    SALAM_KANAN    = "SALAM_KANAN"    # Menoleh ke kanan
+    SALAM_KIRI     = "SALAM_KIRI"     # Menoleh ke kiri
+    SELESAI        = "SELESAI"        # Sholat selesai
 
     # Urutan valid dalam 1 rakaat (rakaat pertama)
     RAKAAT_1_SEQUENCE = [
@@ -238,13 +239,56 @@ class POSE:
         JALSA:          "Duduk Antara Sujud",
         TASYAHUD_AWAL:  "Tasyahud Awal",
         TASYAHUD_AKHIR: "Tasyahud Akhir",
-        SALAM:          "Salam",
+        SALAM_KANAN:    "Salam ke Kanan",
+        SALAM_KIRI:     "Salam ke Kiri",
         SELESAI:        "Selesai ✓",
     }
 
 
 # ─────────────────────────────────────────────────────────────
-# 6. KEYBOARD SHORTCUTS (saat program berjalan)
+# 6. AUDIO MAPPING
+# ─────────────────────────────────────────────────────────────
+# Audio yang diputar saat MEMASUKI suatu state (bacaan utama di posisi tersebut)
+AUDIO_STATE_MAP = {
+    # Rakaat pertama: Qiyam = niat (file niat bisa berbeda per sholat, dihandle di main.py)
+    POSE.TAKBIR:         "takbiratul-ihram.WAV",   # "Allahu Akbar"
+    POSE.SEDEKAP:        "iftitah.WAV",            # Doa Iftitah (hanya rakaat 1, lihat logic di state_machine)
+    POSE.RUKU:           "ruku.WAV",               # Tasbih Rukuk
+    POSE.ITIDAL:         "itidal.WAV",             # Tahmid / Doa I'tidal
+    POSE.SUJUD:          "sujud.WAV",              # Tasbih Sujud
+    POSE.JALSA:          "iftirasy.WAV",           # Doa Duduk Antara Dua Sujud
+    POSE.TASYAHUD_AWAL:  "tasyahud-awal.WAV",     # Doa Tasyahud Awal
+    POSE.TASYAHUD_AKHIR: "tasyahud-akhir.WAV",    # Doa Tasyahud Akhir
+    POSE.SALAM_KANAN:    "salam.WAV",              # "Assalamu'alaikum..."
+    POSE.SALAM_KIRI:     "salam.WAV",              # "Assalamu'alaikum..."
+}
+
+# Audio TRANSISI yang diputar saat BERGERAK MENUJU state berikutnya
+# Key = (from_state, to_state), Value = nama file audio
+AUDIO_TRANSITION_MAP = {
+    # Takbir Intiqal — diucapkan saat turun/naik antar gerakan
+    (POSE.SEDEKAP, POSE.RUKU):           "takbir.WAV",    # Turun ke Rukuk
+    (POSE.ITIDAL,  POSE.SUJUD):          "takbir.WAV",    # Turun ke Sujud 1
+    (POSE.SUJUD,   POSE.JALSA):          "takbir.WAV",    # Bangkit dari Sujud 1
+    (POSE.JALSA,   POSE.SUJUD):          "takbir.WAV",    # Turun ke Sujud 2
+    (POSE.SUJUD,   POSE.QIYAM):          "takbir.WAV",    # Bangkit berdiri ke rakaat baru
+    (POSE.SUJUD,   POSE.TASYAHUD_AWAL):  "takbir.WAV",    # Duduk tasyahud awal
+    (POSE.SUJUD,   POSE.TASYAHUD_AKHIR): "takbir.WAV",    # Duduk tasyahud akhir
+
+    # Tasmi' — diucapkan saat bangkit dari Rukuk
+    (POSE.RUKU,    POSE.ITIDAL):          "tasmi.WAV",     # "Sami'allahu liman hamidah"
+}
+
+# Audio tambahan per sholat (niat, Al-Fatihah, Surat)
+AUDIO_EXTRA = {
+    "niat_subuh":   "niat-subuh.WAV",
+    "alfatihah":    "alfatihah.WAV",
+    "surat":        "al-ikhlas.WAV",     # Surat/ayat pendek default
+}
+
+
+# ─────────────────────────────────────────────────────────────
+# 7. KEYBOARD SHORTCUTS (saat program berjalan)
 # ─────────────────────────────────────────────────────────────
 KEY_QUIT        = ord("q")   # Keluar program
 KEY_RESET       = ord("r")   # Reset state machine
@@ -254,13 +298,15 @@ KEY_CALIBRATE   = ord("c")   # Mulai mode kalibrasi
 
 
 # ─────────────────────────────────────────────────────────────
-# 7. PATH FILE
+# 8. PATH FILE
 # ─────────────────────────────────────────────────────────────
 import os
 
 BASE_DIR          = os.path.dirname(os.path.abspath(__file__))
 LOGS_DIR          = os.path.join(BASE_DIR, "logs")
+AUDIO_DIR         = os.path.join(BASE_DIR, "audio")
 CALIBRATION_FILE  = os.path.join(BASE_DIR, "calibration.json")
 
 # Pastikan folder logs ada
 os.makedirs(LOGS_DIR, exist_ok=True)
+
