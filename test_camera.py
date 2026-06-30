@@ -95,6 +95,11 @@ if not is_stream:
 actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
+# Tukar lebar & tinggi jika rotasi vertikal aktif
+rotation = ACTIVE_PROFILE.get("camera_rotation", None)
+if rotation in [90, 270]:
+    actual_w, actual_h = actual_h, actual_w
+
 print(f"      ✅ Kamera terbuka — resolusi aktual: {actual_w}x{actual_h}")
 
 # ─── Test live feed dengan MediaPipe ────────────────────────
@@ -128,6 +133,15 @@ while cap.isOpened():
     if not ret:
         print("PERINGATAN: Gagal membaca frame. Kamera mungkin terputus.")
         break
+
+    # Rotasi frame jika diatur di profil
+    rotation = ACTIVE_PROFILE.get("camera_rotation", None)
+    if rotation == 90:
+        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    elif rotation == 180:
+        frame = cv2.rotate(frame, cv2.ROTATE_180)
+    elif rotation == 270:
+        frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
     # Flip frame (opsional — agar tampak seperti cermin)
     frame = cv2.flip(frame, 1)

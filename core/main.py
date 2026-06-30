@@ -7,6 +7,12 @@ main.py — Loop Utama & Pipeline Koordinasi (Entry Point)
 
 import os
 import sys
+
+# Tambahkan direktori root project ke sys.path agar config.py bisa diimport
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import time
 import json
 import csv
@@ -172,6 +178,12 @@ class GemaImamApp:
             
         actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        # Tukar lebar & tinggi jika rotasi vertikal aktif
+        rotation = ACTIVE_PROFILE.get("camera_rotation", None)
+        if rotation in [90, 270]:
+            actual_w, actual_h = actual_h, actual_w
+            
         print(f"✅ Kamera siap! Resolusi: {actual_w}x{actual_h}")
         
         # Mulai sesi logging
@@ -219,6 +231,15 @@ class GemaImamApp:
                         if cv2.waitKey(30) & 0xFF == ord('p'):
                             self.paused = False
                     continue
+                
+                # Rotasi frame jika diatur di profil
+                rotation = ACTIVE_PROFILE.get("camera_rotation", None)
+                if rotation == 90:
+                    frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+                elif rotation == 180:
+                    frame = cv2.rotate(frame, cv2.ROTATE_180)
+                elif rotation == 270:
+                    frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
                 
                 # Mirror frame
                 frame = cv2.flip(frame, 1)

@@ -27,6 +27,7 @@ HARDWARE_PROFILES = {
         "camera_fps":        30,
         "buffer_size":       1,
         "skip_frame":        0,      # 0 = proses setiap frame
+        "camera_rotation":   None,   # Rotasi kamera: None, 90, 180, atau 270 (dalam derajat CW)
         "min_detection_conf": 0.7,
         "min_tracking_conf":  0.7,
     },
@@ -39,6 +40,7 @@ HARDWARE_PROFILES = {
         "camera_fps":        15,
         "buffer_size":       1,
         "skip_frame":        1,      # proses 1 dari 2 frame (frame skipping)
+        "camera_rotation":   None,   # Rotasi kamera: None, 90, 180, atau 270 (dalam derajat CW)
         "min_detection_conf": 0.6,   # sedikit diturunkan untuk toleransi
         "min_tracking_conf":  0.6,
     },
