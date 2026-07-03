@@ -203,7 +203,10 @@ class LANDMARK:
     FOOT_GROUP      = [27, 28, 29, 30, 31, 32]
 
     # ── Landmark KRITIS (jika tidak visible, skip klasifikasi) ─
-    CRITICAL = [0, 7, 8, 11, 12, 15, 16, 23, 24, 25, 26]
+    # Hanya sertakan Hidung, Bahu, dan Pinggul.
+    # Pergelangan tangan, lutut, dan telinga dilepas agar deteksi tetap stabil 
+    # saat anggota tubuh tersebut terhalang (seperti saat sujud, duduk, atau salam).
+    CRITICAL = [0, 11, 12, 23, 24]
 
 
 # ─────────────────────────────────────────────────────────────

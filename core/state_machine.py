@@ -93,13 +93,13 @@ class SholatStateMachine:
             return [POSE.BERDIRI_TEGAK]
             
         elif self.current_state == POSE.DUDUK_TASYAHUD_AKHIR:
-            return [POSE.SALAM_KE_KANAN]
+            return [POSE.SALAM_KE_KANAN, POSE.SALAM_KE_KIRI]
             
         elif self.current_state == POSE.SALAM_KE_KANAN:
-            return [POSE.SALAM_KE_KIRI]
+            return [POSE.SALAM_KE_KIRI, POSE.SELESAI]
             
         elif self.current_state == POSE.SALAM_KE_KIRI:
-            return [POSE.SELESAI]
+            return [POSE.SALAM_KE_KANAN, POSE.SELESAI]
             
         elif self.current_state == POSE.SELESAI:
             return []
@@ -143,10 +143,9 @@ class SholatStateMachine:
                 elif self.tasyahud_awal_after is not None and self.rakaat_count == self.tasyahud_awal_after:
                     detected_pose = POSE.DUDUK_TASYAHUD_AWAL
 
-        # 5. Salam hanya valid dari posisi duduk (JALSA/tasyahud) — filter false positive
-        #    Salam dari berdiri tegak diabaikan
+        # 5. Salam hanya valid dari posisi duduk tasyahud akhir atau dari gerakan salam sebelumnya
         if detected_pose in (POSE.SALAM_KE_KANAN, POSE.SALAM_KE_KIRI):
-            if self.current_state not in (POSE.DUDUK_TASYAHUD_AKHIR, POSE.SALAM_KE_KANAN):
+            if self.current_state not in (POSE.DUDUK_TASYAHUD_AKHIR, POSE.SALAM_KE_KANAN, POSE.SALAM_KE_KIRI):
                 detected_pose = self.current_state  # abaikan, kembalikan ke state sekarang
 
         # --- VALIDASI TRANSISI ---
