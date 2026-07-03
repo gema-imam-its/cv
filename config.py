@@ -112,8 +112,10 @@ THRESHOLDS = {
 
     # ── Posisi Pergelangan Tangan (wrist Y) ───────────────
     # (koordinat Y ternormalisasi: 0=atas, 1=bawah)
-    # Takbir: wrist harus LEBIH TINGGI (Y lebih kecil) dari bahu
-    "TAKBIR_WRIST_ABOVE_SHOULDER": 0.0,   # wrist.y < shoulder.y + offset ini
+    # Takbir: wrist sejajar kepala (antara telinga & hidung)
+    # wrist.y < nose.y + offset ini  →  tangan setinggi kepala
+    "TAKBIR_WRIST_ABOVE_SHOULDER": 0.0,   # (tidak lagi dipakai untuk takbir, dipertahankan sbg cadangan)
+    "TAKBIR_WRIST_NEAR_HEAD_OFFSET": 0.10, # wrist.y < nose.y + offset (makin kecil = makin ketat)
 
     # Sedekap: wrist harus di BAWAH bahu dan di ATAS pinggul
     "SEDEKAP_WRIST_BELOW_SHOULDER": 0.02,  # wrist.y > shoulder.y + offset ini

@@ -65,6 +65,11 @@ def get_pose_features(landmarks):
     # Jarak horizontal antar tangan (untuk sedekap)
     feat["wrist_dist_x"] = abs(wrist_l[0] - wrist_r[0])
     
+    # Takbir: wrist sejajar kepala (Y wrist mendekati Y hidung)
+    # Threshold positif = toleransi sedikit di bawah hidung masih diterima
+    feat["wrist_l_near_head"] = wrist_l[1] < (nose[1] + THRESHOLDS["TAKBIR_WRIST_NEAR_HEAD_OFFSET"])
+    feat["wrist_r_near_head"] = wrist_r[1] < (nose[1] + THRESHOLDS["TAKBIR_WRIST_NEAR_HEAD_OFFSET"])
+    
     # Hidung relatif terhadap bahu & pinggul
     feat["nose_below_shoulder"] = nose[1] > (sh_y_avg + THRESHOLDS["SUJUD_NOSE_BELOW_SHOULDER"])
     feat["nose_below_hip"] = nose[1] > (hip_y_avg + THRESHOLDS["SUJUD_NOSE_BELOW_HIP"])
@@ -124,9 +129,10 @@ def classify_pose(landmarks):
     if (feat["hip_angle"] > THRESHOLDS["HIP_STRAIGHT_MIN"] and 
             feat["knee_angle"] > THRESHOLDS["KNEE_STRAIGHT_MIN"]):
             
-        # 1. Takbiratul Ihram: Kedua tangan di atas bahu
-        if feat["wrist_l_above_shoulder"] and feat["wrist_r_above_shoulder"]:
-            # Validasi tambahan: sudut siku terangkat / terbuka
+        # 1. Takbiratul Ihram: Kedua telapak tangan sejajar dengan kepala (setinggi hidung/telinga)
+        #    Juga tetap harus di atas bahu (validasi tambahan agar tidak bentrok dengan sedekap)
+        if (feat["wrist_l_near_head"] and feat["wrist_r_near_head"]):
+            # Validasi sudut siku: lengan terbuka / terangkat
             if feat["arm_angle"] > THRESHOLDS["TAKBIR_ARM_ANGLE_MIN"]:
                 return POSE.TAKBIRATUL_IHRAM
                 
