@@ -85,8 +85,8 @@ class SholatStateMachine:
                 # Tasyahud Awal
                 next_states.append(POSE.DUDUK_TASYAHUD_AWAL)
             else:
-                # Berdiri ke rakaat berikutnya
-                next_states.append(POSE.BERDIRI_TEGAK)
+                # Berdiri ke rakaat berikutnya - langsung ke BERSEDEKAP
+                next_states.append(POSE.BERSEDEKAP)
             return next_states
             
         elif self.current_state == POSE.DUDUK_TASYAHUD_AWAL:
@@ -115,18 +115,25 @@ class SholatStateMachine:
         """
         # --- LOGIKA PEMETAAN POSE FISIK KE POSE LOGIS SHOLAT ---
         
-        # 1. Pemetaan QIYAM ke ITIDAL jika bangun dari Rukuk
+        # 1. Pemetaan BERDIRI_TEGAK ke ITIDAL jika bangun dari Rukuk
         if self.current_state == POSE.RUKUK and detected_pose == POSE.BERDIRI_TEGAK:
             detected_pose = POSE.ITIDAL
 
-        # 2. Pemetaan Sujud fisik ke Sujud Pertama / Kedua
+        # 2. Pemetaan BERDIRI_TEGAK ke BERSEDEKAP jika bangkit dari Sujud Kedua
+        #    (rakaat 2+: langsung bersedekap dengan takbir, tanpa berdiri tegak dulu)
+        if self.current_state == POSE.SUJUD_KEDUA and detected_pose == POSE.BERDIRI_TEGAK:
+            next = self.get_allowed_next_states()
+            if POSE.BERSEDEKAP in next:
+                detected_pose = POSE.BERSEDEKAP
+
+        # 3. Pemetaan Sujud fisik ke Sujud Pertama / Kedua
         if detected_pose == POSE.SUJUD:
             if self.current_state == POSE.ITIDAL:
                 detected_pose = POSE.SUJUD_PERTAMA
             elif self.current_state == POSE.DUDUK_DI_ANTARA_DUA_SUJUD:
                 detected_pose = POSE.SUJUD_KEDUA
 
-        # 3. Pemetaan Duduk fisik (JALSA) ke Duduk Antara Sujud / Tasyahud
+        # 4. Pemetaan Duduk fisik (JALSA) ke Duduk Antara Sujud / Tasyahud
         if detected_pose == POSE.JALSA:
             if self.current_state == POSE.SUJUD_PERTAMA:
                 detected_pose = POSE.DUDUK_DI_ANTARA_DUA_SUJUD
@@ -135,6 +142,12 @@ class SholatStateMachine:
                     detected_pose = POSE.DUDUK_TASYAHUD_AKHIR
                 elif self.tasyahud_awal_after is not None and self.rakaat_count == self.tasyahud_awal_after:
                     detected_pose = POSE.DUDUK_TASYAHUD_AWAL
+
+        # 5. Salam hanya valid dari posisi duduk (JALSA/tasyahud) — filter false positive
+        #    Salam dari berdiri tegak diabaikan
+        if detected_pose in (POSE.SALAM_KE_KANAN, POSE.SALAM_KE_KIRI):
+            if self.current_state not in (POSE.DUDUK_TASYAHUD_AKHIR, POSE.SALAM_KE_KANAN):
+                detected_pose = self.current_state  # abaikan, kembalikan ke state sekarang
 
         # --- VALIDASI TRANSISI ---
         allowed_next = self.get_allowed_next_states()
@@ -173,11 +186,13 @@ class SholatStateMachine:
         was_first_sedekap = self.is_first_sedekap
         
         # Logika increment rakaat
-        if new_state == POSE.BERDIRI_TEGAK:
-            if old_state in (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AWAL):
+        if new_state == POSE.BERSEDEKAP:
+            # Rakaat bertambah ketika bersedekap setelah sujud kedua (rakaat 2+)
+            if old_state in (POSE.SUJUD_KEDUA,):
                 self.rakaat_count += 1
-                
-        elif new_state == POSE.BERSEDEKAP:
+            # Rakaat bertambah juga ketika berdiri dari tasyahud awal
+            elif old_state == POSE.DUDUK_TASYAHUD_AWAL:
+                pass  # increment sudah terjadi saat transisi BERDIRI_TEGAK
             if self.is_first_sedekap:
                 self.is_first_sedekap = False
             

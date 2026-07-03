@@ -103,14 +103,14 @@ THRESHOLDS = {
     "POSE_HOLD_FRAMES":         5,
 
     # ── Sudut Pinggul (hip_angle) ──────────────────────────
-    "HIP_STRAIGHT_MIN":        155,   # berdiri tegak: pinggul > nilai ini
-    "HIP_RUKU_MIN":             60,   # ruku': batas bawah
-    "HIP_RUKU_MAX":            120,   # ruku': batas atas
-    "HIP_SUJUD_MAX":            80,   # sujud: pinggul harus < nilai ini
+    "HIP_STRAIGHT_MIN":        150,   # berdiri tegak: pinggul > nilai ini
+    "HIP_RUKU_MIN":             55,   # ruku': batas bawah (lebih longgar)
+    "HIP_RUKU_MAX":            130,   # ruku': batas atas (lebih longgar)
+    "HIP_SUJUD_MAX":            90,   # sujud: pinggul harus < nilai ini (lebih longgar)
 
     # ── Sudut Lutut (knee_angle) ───────────────────────────
-    "KNEE_STRAIGHT_MIN":       155,   # lutut lurus (berdiri): > nilai ini
-    "KNEE_BENT_MAX":           130,   # lutut tertekuk (duduk/sujud): < nilai ini
+    "KNEE_STRAIGHT_MIN":       140,   # lutut lurus (berdiri/ruku'): > nilai ini (lebih mudah)
+    "KNEE_BENT_MAX":           125,   # lutut tertekuk (duduk/sujud): < nilai ini
 
     # ── Posisi Pergelangan Tangan (wrist Y) ───────────────
     # (koordinat Y ternormalisasi: 0=atas, 1=bawah)
@@ -128,12 +128,12 @@ THRESHOLDS = {
 
     # ── Posisi Kepala (nose Y) ────────────────────────────
     # Sujud: hidung harus LEBIH RENDAH (Y lebih besar) dari bahu
-    "SUJUD_NOSE_BELOW_SHOULDER":   0.05,  # nose.y > shoulder.y + offset ini
+    "SUJUD_NOSE_BELOW_SHOULDER":  -0.05, # hidung boleh sedikit lebih tinggi dari bahu (lebih toleran)
     "SUJUD_NOSE_BELOW_HIP":        0.0,   # nose.y > hip.y + offset ini
 
     # ── Deteksi Salam (head rotation) ────────────────────
     # Offset X kepala dari center badan untuk mendeteksi menoleh
-    "SALAM_HEAD_OFFSET_THRESHOLD": 0.08,
+    "SALAM_HEAD_OFFSET_THRESHOLD": 0.05, # lebih sensitif (sebelumnya 0.08)
 
     # ── Visibilitas Landmark ──────────────────────────────
     "LANDMARK_MIN_VISIBILITY":     0.5,   # landmark dengan vis < ini diabaikan

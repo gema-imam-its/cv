@@ -117,12 +117,13 @@ def classify_pose(landmarks):
             feat["knee_angle"] > THRESHOLDS["KNEE_STRAIGHT_MIN"]):
         return POSE.RUKUK
         
-    # ── D. SALAM (Menoleh Kanan / Kiri saat Berdiri/Duduk) ──
-    # Catatan: Salam terdeteksi dari simpangan kepala
-    if feat["head_offset_x"] > THRESHOLDS["SALAM_HEAD_OFFSET_THRESHOLD"]:
-        return POSE.SALAM_KE_KANAN  # Salam (arah kanan)
-    elif feat["head_offset_x"] < -THRESHOLDS["SALAM_HEAD_OFFSET_THRESHOLD"]:
-        return POSE.SALAM_KE_KIRI   # Salam (arah kiri)
+    # ── D. SALAM (Menoleh Kanan / Kiri — hanya saat posisi duduk) ──
+    # Salam hanya valid jika lutut tertekuk (posisi duduk tasyahud)
+    if feat["knee_angle"] < THRESHOLDS["KNEE_BENT_MAX"] and feat["nose_above_shoulder"]:
+        if feat["head_offset_x"] > THRESHOLDS["SALAM_HEAD_OFFSET_THRESHOLD"]:
+            return POSE.SALAM_KE_KANAN
+        elif feat["head_offset_x"] < -THRESHOLDS["SALAM_HEAD_OFFSET_THRESHOLD"]:
+            return POSE.SALAM_KE_KIRI
         
     # ── E. POSE BERDIRI (Takbir / Sedekap / Qiyam) ──
     # Jika pinggul dan lutut dalam posisi lurus/tegak
