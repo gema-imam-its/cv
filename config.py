@@ -136,6 +136,9 @@ THRESHOLDS = {
 
     # ── Sudut Lengan (arm_angle) ──────────────────────────
     "TAKBIR_ARM_ANGLE_MIN":        60,    # lengan harus cukup terbuka saat takbir
+
+    # ── Durasi Tuma'ninah (Detik) ─────────────────────────
+    "TUMANINAH_MIN_DURATION":      3.0,   # Durasi minimum dalam detik untuk memenuhi tuma'ninah
 }
 
 
@@ -306,4 +309,12 @@ CALIBRATION_FILE  = os.path.join(BASE_DIR, "calibration.json")
 
 # Pastikan folder logs ada
 os.makedirs(LOGS_DIR, exist_ok=True)
+
+
+# ─────────────────────────────────────────────────────────────
+# 9. GPIO CONFIGURATION (Orange Pi 4 Pro)
+# ─────────────────────────────────────────────────────────────
+# Set ke True jika menggunakan tombol fisik yang dihubungkan ke GPIO Orange Pi
+USE_GPIO_BUTTON = False  
+GPIO_RESET_PIN  = 85     # Pin GPIO Orange Pi 4 Pro (Physical Pin 7 = GPIO2_C5 = 85)
 

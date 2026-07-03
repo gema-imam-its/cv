@@ -24,6 +24,7 @@ class SholatStateMachine:
         
         # Log audit gerakan
         self.completed_steps = []
+        self.state_start_time = None
         
         # Flag untuk tracking audio sedekap (Iftitah hanya rakaat 1)
         self.is_first_sedekap = True
@@ -38,6 +39,7 @@ class SholatStateMachine:
         self.hold_counter = 0
         self.target_state = None
         self.completed_steps = []
+        self.state_start_time = None
         self.is_first_sedekap = True
         print("[INFO] State Machine berhasil di-reset.")
 
@@ -160,6 +162,9 @@ class SholatStateMachine:
 
     def _commit_transition(self, new_state):
         """Mengonfirmasi transisi dan mengembalikan data transisi."""
+        import time
+        now = time.time()
+        
         old_state = self.current_state
         self.current_state = new_state
         self.hold_counter = 0
@@ -176,9 +181,35 @@ class SholatStateMachine:
             if self.is_first_sedekap:
                 self.is_first_sedekap = False
             
+        # Update step terakhir yang selesai
+        if self.completed_steps and self.state_start_time is not None:
+            prev_step = self.completed_steps[-1]
+            duration = now - self.state_start_time
+            prev_step["exit_time"] = time.strftime("%H:%M:%S", time.localtime(now))
+            prev_step["duration_seconds"] = round(duration, 2)
+            
+            # Gerakan yang membutuhkan tuma'ninah
+            tumaninah_states = (
+                POSE.RUKUK, 
+                POSE.ITIDAL, 
+                POSE.SUJUD_PERTAMA, 
+                POSE.SUJUD_KEDUA, 
+                POSE.DUDUK_DI_ANTARA_DUA_SUJUD
+            )
+            if prev_step["state"] in tumaninah_states:
+                tumaninah_threshold = THRESHOLDS.get("TUMANINAH_MIN_DURATION", 3.0)
+                prev_step["tumaninah_met"] = duration >= tumaninah_threshold
+            else:
+                prev_step["tumaninah_met"] = None
+        
+        self.state_start_time = now
         log_entry = {
             "rakaat": self.rakaat_count,
             "state": new_state,
+            "entry_time": time.strftime("%H:%M:%S", time.localtime(now)),
+            "exit_time": None,
+            "duration_seconds": None,
+            "tumaninah_met": None
         }
         self.completed_steps.append(log_entry)
         

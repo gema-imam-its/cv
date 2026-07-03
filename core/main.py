@@ -42,7 +42,9 @@ from config import (
     KEY_RESET,
     KEY_DEBUG,
     KEY_PAUSE,
-    KEY_CALIBRATE
+    KEY_CALIBRATE,
+    USE_GPIO_BUTTON,
+    GPIO_RESET_PIN
 )
 from pose_utils import get_coords
 from pose_classifier import classify_pose, get_pose_features
@@ -132,11 +134,81 @@ class AudioPlayer:
                 self.active_process = None
                 self.queue.task_done()
 
+
+class ButtonListener:
+    """
+    Mendeteksi penekanan tombol untuk memicu RESET sholat.
+    Mendukung dua mode:
+      1. GPIO fisik (tombol dihubungkan ke pin GPIO Orange Pi)
+         → Aktifkan dengan USE_GPIO_BUTTON = True di config.py
+      2. Keyboard (fallback otomatis, tekan 'r' di terminal)
+         → Sudah terintegrasi di loop utama OpenCV (KEY_RESET)
+    """
+    def __init__(self, callback):
+        self.callback = callback
+        self.running = False
+        self.thread = None
+        self._gpio_ok = False
+
+    def start(self):
+        """Memulai listener sesuai konfigurasi di config.py."""
+        if USE_GPIO_BUTTON:
+            self._start_gpio()
+        else:
+            print("[BUTTON] Mode tombol: Keyboard (tekan 'r' untuk reset). GPIO dinonaktifkan.")
+
+    def _start_gpio(self):
+        """Coba inisialisasi GPIO. Jika gagal, cetak peringatan saja."""
+        try:
+            import OPi.GPIO as GPIO
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(GPIO_RESET_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            self._gpio = GPIO
+            self._gpio_ok = True
+            self.running = True
+            self.thread = threading.Thread(target=self._poll_gpio, daemon=True)
+            self.thread.start()
+            print(f"[BUTTON] GPIO listener diaktifkan pada pin {GPIO_RESET_PIN}. Tekan tombol fisik untuk reset.")
+        except ImportError:
+            print("[BUTTON WARNING] Library 'OPi.GPIO' tidak ditemukan.")
+            print("                 Install dengan: pip install OPi.GPIO")
+            print("                 Fallback: gunakan tombol keyboard 'r' untuk reset.")
+        except Exception as e:
+            print(f"[BUTTON WARNING] Gagal inisialisasi GPIO pin {GPIO_RESET_PIN}: {e}")
+            print("                 Fallback: gunakan tombol keyboard 'r' untuk reset.")
+
+    def _poll_gpio(self):
+        """Polling pin GPIO di background thread (active-low, pull-up)."""
+        prev_state = 1  # HIGH (tidak ditekan)
+        while self.running:
+            try:
+                current_state = self._gpio.input(GPIO_RESET_PIN)
+                # Transisi HIGH → LOW = tombol ditekan
+                if prev_state == 1 and current_state == 0:
+                    print(f"[BUTTON] Tombol GPIO pin {GPIO_RESET_PIN} ditekan. Memicu RESET!")
+                    self.callback()
+                    time.sleep(0.5)  # debounce
+                prev_state = current_state
+            except Exception as e:
+                print(f"[BUTTON ERROR] Gagal membaca pin GPIO: {e}")
+                break
+            time.sleep(0.02)  # polling setiap 20ms
+
+    def stop(self):
+        self.running = False
+        if self._gpio_ok:
+            try:
+                self._gpio.cleanup()
+            except Exception:
+                pass
+
+
 class GemaImamApp:
     def __init__(self):
         self.active_prayer = "Subuh"
         self.state_machine = SholatStateMachine(self.active_prayer)
         self.audio_player = AudioPlayer()
+        self.button_listener = ButtonListener(callback=self.reset_from_button)
         self.debug_mode = False
         self.paused = False
         
@@ -164,6 +236,12 @@ class GemaImamApp:
             self.audio_player.play(AUDIO_EXTRA["niat_subuh"])
         else:
             print(f"[AUDIO] Niat untuk sholat {self.active_prayer} tidak tersedia di folder audio.")
+
+    def reset_from_button(self):
+        """Callback untuk me-reset state sholat dari tombol GPIO atau keyboard 'r'."""
+        print("[BUTTON] Reset sholat dipicu.")
+        self.state_machine.reset()
+        self.audio_player.clear()
 
     def load_calibration(self):
         """Memuat data kalibrasi dari file jika tersedia."""
@@ -207,17 +285,38 @@ class GemaImamApp:
         status_str = "Dibatalkan" if force_cancel else "Selesai"
         duration = (datetime.now() - self.start_timestamp).total_seconds()
         
+        # Hitung statistik tuma'ninah
+        total_tumaninah_check = 0
+        total_tumaninah_success = 0
+        for step in self.state_machine.completed_steps:
+            if step.get("tumaninah_met") is not None:
+                total_tumaninah_check += 1
+                if step["tumaninah_met"] is True:
+                    total_tumaninah_success += 1
+                    
+        tumaninah_score = (total_tumaninah_success / total_tumaninah_check * 100.0) if total_tumaninah_check > 0 else 100.0
+        
         # 1. Simpan CSV (Detail Gerakan Rakaat demi Rakaat)
         csv_filename = os.path.join(LOGS_DIR, f"sholat_{self.active_prayer}_{timestamp_str}.csv")
         try:
             with open(csv_filename, "w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(["Rakaat", "State/Pose", "Waktu"])
+                writer.writerow(["Rakaat", "Gerakan/State", "Waktu Masuk", "Waktu Keluar", "Durasi (Detik)", "Tuma'ninah Terpenuhi"])
                 for step in self.state_machine.completed_steps:
+                    tumaninah_met_val = step.get("tumaninah_met")
+                    tumaninah_str = "N/A"
+                    if tumaninah_met_val is True:
+                        tumaninah_str = "Ya"
+                    elif tumaninah_met_val is False:
+                        tumaninah_str = "Tidak"
+                        
                     writer.writerow([
-                        step["rakaat"],
-                        step["state"],
-                        datetime.now().strftime("%H:%M:%S")
+                        step.get("rakaat", 1),
+                        POSE.DISPLAY_NAME.get(step.get("state"), step.get("state", "UNKNOWN")),
+                        step.get("entry_time", "-"),
+                        step.get("exit_time") if step.get("exit_time") else ("Selesai" if not force_cancel else "Batal"),
+                        step.get("duration_seconds") if step.get("duration_seconds") is not None else "-",
+                        tumaninah_str
                     ])
             print(f"[LOGGER] Log CSV detail disimpan di: {csv_filename}")
         except Exception as e:
@@ -231,6 +330,12 @@ class GemaImamApp:
             "durasi_detik": round(duration, 1),
             "status": status_str,
             "total_rakaat_dilewati": self.state_machine.rakaat_count,
+            "statistik_tumaninah": {
+                "total_gerakan_tumaninah": total_tumaninah_check,
+                "terpenuhi": total_tumaninah_success,
+                "tidak_terpenuhi": total_tumaninah_check - total_tumaninah_success,
+                "skor_persentase": round(tumaninah_score, 1)
+            },
             "log_transisi": self.state_machine.completed_steps
         }
         try:
@@ -239,6 +344,22 @@ class GemaImamApp:
             print(f"[LOGGER] Ringkasan JSON disimpan di: {json_filename}")
         except Exception as e:
             print(f"[ERROR] Gagal menyimpan log JSON: {e}")
+            
+        # Tampilkan laporan evaluasi KPI di terminal
+        print("\n" + "=" * 55)
+        print("          LAPORAN EVALUASI SHOLAT (KPI)")
+        print("=" * 55)
+        print(f" Sholat      : {self.active_prayer}")
+        print(f" Tanggal     : {self.start_timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f" Status      : {status_str}")
+        print(f" Durasi      : {round(duration, 1)} detik")
+        print(f" Total Rakaat: {self.state_machine.rakaat_count}")
+        print("-" * 55)
+        if total_tumaninah_check > 0:
+            print(f" SKOR TUMA'NINAH: {tumaninah_score:.1f}% ({total_tumaninah_success}/{total_tumaninah_check} gerakan tepat waktu)")
+        else:
+            print(" SKOR TUMA'NINAH: N/A (Belum melakukan gerakan ruku/sujud)")
+        print("=" * 55 + "\n")
 
     def run(self):
         camera_index = ACTIVE_PROFILE["camera_index"]
@@ -284,8 +405,10 @@ class GemaImamApp:
         
         # Mulai sesi logging
         self.start_session_logging()
-        self.play_niat_audio()
         
+        # Start button listener (GPIO atau keyboard)
+        self.button_listener.start()
+            
         frame_count = 0
         fps = 0.0
         start_time = time.time()
@@ -356,24 +479,31 @@ class GemaImamApp:
                         if not self.calibrating:
                             transition_info = self.state_machine.update(last_classified_pose)
                             if transition_info:
+                                # Opsi 1: Hentikan audio yang sedang berjalan dan kosongkan antrean secara instan
+                                self.audio_player.clear()
+                                
                                 from_st = transition_info["from"]
                                 to_st = transition_info["to"]
                                 
-                                # Putar audio transisi (seperti Takbir Intiqal / Tasmi')
-                                audio_trans = AUDIO_TRANSITION_MAP.get((from_st, to_st))
-                                if audio_trans:
-                                    self.audio_player.play(audio_trans)
-                                    
-                                # Putar audio bacaan di dalam posisi tersebut (State Audio)
-                                if to_st == POSE.BERSEDEKAP:
-                                    if transition_info["is_first_sedekap"]:
-                                        self.audio_player.play("iftitah.WAV")
-                                    self.audio_player.play("alfatihah.WAV")
-                                    self.audio_player.play("al-ikhlas.WAV")
+                                # Logika Niat: Hanya diputar pada gerakan BERDIRI_TEGAK pertama dari UNKNOWN
+                                if to_st == POSE.BERDIRI_TEGAK and from_st == POSE.UNKNOWN:
+                                    self.play_niat_audio()
                                 else:
-                                    audio_state = AUDIO_STATE_MAP.get(to_st)
-                                    if audio_state:
-                                        self.audio_player.play(audio_state)
+                                    # Putar audio transisi (Takbir Intiqal / Tasmi')
+                                    audio_trans = AUDIO_TRANSITION_MAP.get((from_st, to_st))
+                                    if audio_trans:
+                                        self.audio_player.play(audio_trans)
+                                        
+                                    # Putar audio bacaan gerakan saat ini
+                                    if to_st == POSE.BERSEDEKAP:
+                                        if transition_info["is_first_sedekap"]:
+                                            self.audio_player.play("iftitah.WAV")
+                                        self.audio_player.play("alfatihah.WAV")
+                                        self.audio_player.play("al-ikhlas.WAV")
+                                    else:
+                                        audio_state = AUDIO_STATE_MAP.get(to_st)
+                                        if audio_state:
+                                            self.audio_player.play(audio_state)
                         
                         # 3. Hitung fitur untuk debug sudut
                         last_features = get_pose_features(last_results.pose_landmarks)
@@ -449,8 +579,7 @@ class GemaImamApp:
                         self.save_session_logs(force_cancel=True)
                         break
                     elif key == KEY_RESET:
-                        self.state_machine.reset()
-                        self.play_niat_audio()
+                        self.reset_from_button()
                     elif key == KEY_DEBUG:
                         self.debug_mode = not self.debug_mode
                         print(f"[INFO] Debug mode: {'AKTIF' if self.debug_mode else 'NONAKTIF'}")
@@ -484,6 +613,7 @@ class GemaImamApp:
             print("\n[INFO] Program dihentikan via KeyboardInterrupt.")
             self.save_session_logs(force_cancel=True)
         finally:
+            self.button_listener.stop()
             cap.release()
             if HAS_DISPLAY:
                 cv2.destroyAllWindows()
