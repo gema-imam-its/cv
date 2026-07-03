@@ -133,7 +133,7 @@ def classify_pose(landmarks):
         #    Juga tetap harus di atas bahu (validasi tambahan agar tidak bentrok dengan sedekap)
         if (feat["wrist_l_near_head"] and feat["wrist_r_near_head"]):
             # Validasi sudut siku: lengan terbuka / terangkat
-            if feat["arm_angle"] > THRESHOLDS["TAKBIR_ARM_ANGLE_MIN"]:
+            #if feat["arm_angle"] > THRESHOLDS["TAKBIR_ARM_ANGLE_MIN"]:
                 return POSE.TAKBIRATUL_IHRAM
                 
         # 2. Bersedekap: Tangan di bawah bahu, di atas pinggul, dan berdekatan secara X

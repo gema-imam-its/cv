@@ -98,7 +98,9 @@ SHOLAT_KEY_MAP = {
 # ─────────────────────────────────────────────────────────────
 THRESHOLDS = {
     # Jumlah frame minimum sebelum pose dikonfirmasi
-    "POSE_HOLD_FRAMES":         10,
+    # Lebih kecil = lebih responsif, tapi lebih rentan jitter
+    # Rekomendasi: 5 (cepat) s/d 10 (stabil). Default: 5
+    "POSE_HOLD_FRAMES":         5,
 
     # ── Sudut Pinggul (hip_angle) ──────────────────────────
     "HIP_STRAIGHT_MIN":        155,   # berdiri tegak: pinggul > nilai ini
