@@ -104,26 +104,26 @@ def classify_pose(landmarks):
             feat["hip_angle"] < THRESHOLDS["HIP_SUJUD_MAX"]):
         return POSE.SUJUD
         
-    # ── B. DUDUK (Jalsa / Tasyahud) ──
-    # Ciri khas: Lutut tertekuk, kepala tegak (hidung di atas bahu), lutut di bawah pinggul
-    if (feat["knee_angle"] < THRESHOLDS["KNEE_BENT_MAX"] and 
-            feat["nose_above_shoulder"] and 
-            feat["knee_below_hip"]):
-        return POSE.JALSA
-        
-    # ── C. RUKU' ──
-    # Ciri khas: Pinggul tertekuk mendekati 90 derajat, lutut tetap lurus
-    if (THRESHOLDS["HIP_RUKU_MIN"] <= feat["hip_angle"] <= THRESHOLDS["HIP_RUKU_MAX"] and 
-            feat["knee_angle"] > THRESHOLDS["KNEE_STRAIGHT_MIN"]):
-        return POSE.RUKUK
-        
-    # ── D. SALAM (Menoleh Kanan / Kiri — hanya saat posisi duduk) ──
+    # ── B. SALAM (Menoleh Kanan / Kiri — hanya saat posisi duduk) ──
     # Salam hanya valid jika lutut tertekuk (posisi duduk tasyahud)
     if feat["knee_angle"] < THRESHOLDS["KNEE_BENT_MAX"] and feat["nose_above_shoulder"]:
         if feat["head_offset_x"] > THRESHOLDS["SALAM_HEAD_OFFSET_THRESHOLD"]:
             return POSE.SALAM_KE_KANAN
         elif feat["head_offset_x"] < -THRESHOLDS["SALAM_HEAD_OFFSET_THRESHOLD"]:
             return POSE.SALAM_KE_KIRI
+
+    # ── C. DUDUK (Jalsa / Tasyahud) ──
+    # Ciri khas: Lutut tertekuk, kepala tegak (hidung di atas bahu), lutut di bawah pinggul
+    if (feat["knee_angle"] < THRESHOLDS["KNEE_BENT_MAX"] and 
+            feat["nose_above_shoulder"] and 
+            feat["knee_below_hip"]):
+        return POSE.JALSA
+        
+    # ── D. RUKU' ──
+    # Ciri khas: Pinggul tertekuk mendekati 90 derajat, lutut tetap lurus
+    if (THRESHOLDS["HIP_RUKU_MIN"] <= feat["hip_angle"] <= THRESHOLDS["HIP_RUKU_MAX"] and 
+            feat["knee_angle"] > THRESHOLDS["KNEE_STRAIGHT_MIN"]):
+        return POSE.RUKUK
         
     # ── E. POSE BERDIRI (Takbir / Sedekap / Qiyam) ──
     # Jika pinggul dan lutut dalam posisi lurus/tegak

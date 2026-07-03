@@ -274,7 +274,8 @@ AUDIO_TRANSITION_MAP = {
     (POSE.ITIDAL,  POSE.SUJUD_PERTAMA):             "takbir.WAV",    # Turun ke Sujud Pertama
     (POSE.SUJUD_PERTAMA, POSE.DUDUK_DI_ANTARA_DUA_SUJUD): "takbir.WAV", # Bangkit dari Sujud Pertama
     (POSE.DUDUK_DI_ANTARA_DUA_SUJUD, POSE.SUJUD_KEDUA): "takbir.WAV",  # Turun ke Sujud Kedua
-    (POSE.SUJUD_KEDUA, POSE.BERDIRI_TEGAK):          "takbir.WAV",    # Bangkit berdiri ke rakaat berikutnya
+    (POSE.SUJUD_KEDUA, POSE.BERSEDEKAP):             "takbir.WAV",    # Bangkit bersedekap ke rakaat berikutnya (rakaat 2+)
+    (POSE.SUJUD_KEDUA, POSE.BERDIRI_TEGAK):          "takbir.WAV",    # Bangkit berdiri (fallback)
     (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AWAL):   "takbir.WAV",    # Duduk tasyahud awal
     (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AKHIR):  "takbir.WAV",    # Duduk tasyahud akhir
     (POSE.DUDUK_TASYAHUD_AWAL, POSE.BERDIRI_TEGAK):  "takbir.WAV",    # Bangkit dari tasyahud awal ke rakaat berikutnya
