@@ -54,10 +54,18 @@ import visualizer
 # Cek support display GUI
 HAS_DISPLAY = "DISPLAY" in os.environ or os.name == "nt"
 
+# Daftar file audio bacaan sholat yang wajib/sunnah diselesaikan (jika terpotong dianggap kesalahan Imam)
+READING_AUDIOS = {
+    "alfatihah.WAV", "al-ikhlas.WAV", "ruku.WAV", "itidal.WAV",
+    "sujud.WAV", "iftirasy.WAV", "tasyahud-awal.WAV", "tasyahud-akhir.WAV",
+    "iftitah.WAV", "qunut.WAV", "niat-subuh.WAV"
+}
+
 class AudioPlayer:
     def __init__(self):
         self.queue = queue.Queue()
         self.active_process = None
+        self.current_playing_file = None
         self.thread = threading.Thread(target=self._worker, daemon=True)
         self.thread.start()
         
@@ -72,10 +80,16 @@ class AudioPlayer:
         self.queue.put((filepath, delay))
         
     def clear(self):
-        """Mengosongkan antrean audio dan menghentikan audio yang sedang diputar."""
+        """Mengosongkan antrean audio dan menghentikan audio yang sedang diputar.
+           Mengembalikan daftar nama file audio yang terpotong/batal diputar."""
+        interrupted = []
+        if self.current_playing_file:
+            interrupted.append(os.path.basename(self.current_playing_file))
+            
         while not self.queue.empty():
             try:
-                self.queue.get_nowait()
+                filepath, _ = self.queue.get_nowait()
+                interrupted.append(os.path.basename(filepath))
             except queue.Empty:
                 break
         if self.active_process:
@@ -88,6 +102,9 @@ class AudioPlayer:
             except Exception:
                 pass
             self.active_process = None
+        
+        self.current_playing_file = None
+        return interrupted
                 
     @staticmethod
     def _find_player():
@@ -108,6 +125,7 @@ class AudioPlayer:
         while True:
             try:
                 filepath, delay = self.queue.get()
+                self.current_playing_file = filepath
                 if delay > 0:
                     time.sleep(delay)
 
@@ -131,6 +149,7 @@ class AudioPlayer:
             except Exception as e:
                 print(f"[AUDIO ERROR] Gagal memutar {filepath if 'filepath' in locals() else ''}: {e}")
             finally:
+                self.current_playing_file = None
                 self.active_process = None
                 self.queue.task_done()
 
@@ -228,6 +247,7 @@ class GemaImamApp:
         
         # Data logger
         self.start_timestamp = None
+        self.imam_mistakes_count = 0
 
     def play_niat_audio(self):
         """Memutar audio niat sholat yang aktif."""
@@ -242,6 +262,7 @@ class GemaImamApp:
         print("[BUTTON] Reset sholat dipicu.")
         self.state_machine.reset()
         self.audio_player.clear()
+        self.imam_mistakes_count = 0
 
     def load_calibration(self):
         """Memuat data kalibrasi dari file jika tersedia."""
@@ -301,7 +322,7 @@ class GemaImamApp:
         try:
             with open(csv_filename, "w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(["Rakaat", "Gerakan/State", "Waktu Masuk", "Waktu Keluar", "Durasi (Detik)", "Tuma'ninah Terpenuhi"])
+                writer.writerow(["Rakaat", "Gerakan/State", "Waktu Masuk", "Waktu Keluar", "Durasi (Detik)", "Tuma'ninah Terpenuhi", "Bacaan Terpotong (Kesalahan)"])
                 for step in self.state_machine.completed_steps:
                     tumaninah_met_val = step.get("tumaninah_met")
                     tumaninah_str = "N/A"
@@ -316,7 +337,8 @@ class GemaImamApp:
                         step.get("entry_time", "-"),
                         step.get("exit_time") if step.get("exit_time") else ("Selesai" if not force_cancel else "Batal"),
                         step.get("duration_seconds") if step.get("duration_seconds") is not None else "-",
-                        tumaninah_str
+                        tumaninah_str,
+                        step.get("bacaan_terpotong") if step.get("bacaan_terpotong") else "-"
                     ])
             print(f"[LOGGER] Log CSV detail disimpan di: {csv_filename}")
         except Exception as e:
@@ -330,6 +352,7 @@ class GemaImamApp:
             "durasi_detik": round(duration, 1),
             "status": status_str,
             "total_rakaat_dilewati": self.state_machine.rakaat_count,
+            "kesalahan_imam": self.imam_mistakes_count,
             "statistik_tumaninah": {
                 "total_gerakan_tumaninah": total_tumaninah_check,
                 "terpenuhi": total_tumaninah_success,
@@ -359,6 +382,7 @@ class GemaImamApp:
             print(f" SKOR TUMA'NINAH: {tumaninah_score:.1f}% ({total_tumaninah_success}/{total_tumaninah_check} gerakan tepat waktu)")
         else:
             print(" SKOR TUMA'NINAH: N/A (Belum melakukan gerakan ruku/sujud)")
+        print(f" KESALAHAN IMAM : {self.imam_mistakes_count} kali (gerakan mendahului bacaan)")
         print("=" * 55 + "\n")
 
     def run(self):
@@ -480,7 +504,15 @@ class GemaImamApp:
                             transition_info = self.state_machine.update(last_classified_pose)
                             if transition_info:
                                 # Opsi 1: Hentikan audio yang sedang berjalan dan kosongkan antrean secara instan
-                                self.audio_player.clear()
+                                interrupted_files = self.audio_player.clear()
+                                
+                                # Evaluasi kesalahan Imam (bacaan terpotong sebelum selesai)
+                                for audio_file in interrupted_files:
+                                    if audio_file in READING_AUDIOS:
+                                        self.imam_mistakes_count += 1
+                                        print(f"[EVALUASI IMAM] KESALAHAN: Imam berpindah gerakan sebelum bacaan '{audio_file}' selesai!")
+                                        if len(self.state_machine.completed_steps) >= 2:
+                                            self.state_machine.completed_steps[-2]["bacaan_terpotong"] = audio_file
                                 
                                 from_st = transition_info["from"]
                                 to_st = transition_info["to"]
@@ -536,6 +568,17 @@ class GemaImamApp:
                                 self.calibration_samples = []
                                 print("[CALIBRATION] Selesai!")
                 
+                # Auto-exit jika sholat sudah SELESAI atau audio salam kedua selesai diputar
+                if self.state_machine.current_state == POSE.SELESAI:
+                    print("[INFO] Sholat telah selesai dengan sempurna. Menutup program...")
+                    break
+                elif self.state_machine.current_state == POSE.SALAM_KE_KIRI:
+                    if self.audio_player.queue.empty() and not self.audio_player.current_playing_file:
+                        print("[INFO] Audio Salam Ke Kiri selesai diputar. Menunggu jeda 2 detik sebelum menutup...")
+                        time.sleep(2.0)
+                        self.state_machine.current_state = POSE.SELESAI
+                        break
+                                
                 # Hitung FPS
                 elapsed = time.time() - start_time
                 fps = frame_count / elapsed if elapsed > 0 else 0.0

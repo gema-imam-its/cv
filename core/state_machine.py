@@ -143,7 +143,13 @@ class SholatStateMachine:
                 elif self.tasyahud_awal_after is not None and self.rakaat_count == self.tasyahud_awal_after:
                     detected_pose = POSE.DUDUK_TASYAHUD_AWAL
 
-        # 5. Salam hanya valid dari posisi duduk tasyahud akhir atau dari gerakan salam sebelumnya
+        # 5. Pemetaan kembali ke JALSA (tengah/lurus) setelah Salam Kedua menjadi SELESAI
+        if self.current_state in (POSE.SALAM_KE_KANAN, POSE.SALAM_KE_KIRI) and detected_pose == POSE.JALSA:
+            allowed = self.get_allowed_next_states()
+            if POSE.SELESAI in allowed:
+                detected_pose = POSE.SELESAI
+
+        # 6. Salam hanya valid dari posisi duduk tasyahud akhir atau dari gerakan salam sebelumnya
         if detected_pose in (POSE.SALAM_KE_KANAN, POSE.SALAM_KE_KIRI):
             if self.current_state not in (POSE.DUDUK_TASYAHUD_AKHIR, POSE.SALAM_KE_KANAN, POSE.SALAM_KE_KIRI):
                 detected_pose = self.current_state  # abaikan, kembalikan ke state sekarang
@@ -223,7 +229,8 @@ class SholatStateMachine:
             "entry_time": time.strftime("%H:%M:%S", time.localtime(now)),
             "exit_time": None,
             "duration_seconds": None,
-            "tumaninah_met": None
+            "tumaninah_met": None,
+            "bacaan_terpotong": None
         }
         self.completed_steps.append(log_entry)
         
