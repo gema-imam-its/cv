@@ -326,3 +326,10 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 USE_GPIO_BUTTON = False  
 GPIO_RESET_PIN  = 85     # Pin GPIO Orange Pi 4 Pro (Physical Pin 7 = GPIO2_C5 = 85)
 
+
+# ─────────────────────────────────────────────────────────────
+# 10. DETEKSI SHOLAT OTOMATIS (WIB / GMT+7)
+# ─────────────────────────────────────────────────────────────
+AUTO_DETECT_PRAYER = True        # Aktifkan deteksi sholat otomatis saat startup berdasarkan jam sistem
+PRAYER_OFFSET_MINUTES = 30       # Masuk waktu sholat X menit lebih awal (misal: 30 menit sebelum Subuh)
+

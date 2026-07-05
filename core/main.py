@@ -44,7 +44,8 @@ from config import (
     KEY_PAUSE,
     KEY_CALIBRATE,
     USE_GPIO_BUTTON,
-    GPIO_RESET_PIN
+    GPIO_RESET_PIN,
+    AUTO_DETECT_PRAYER
 )
 from pose_utils import get_coords
 from pose_classifier import classify_pose, get_pose_features
@@ -225,6 +226,15 @@ class ButtonListener:
 class GemaImamApp:
     def __init__(self):
         self.active_prayer = "Subuh"
+        if AUTO_DETECT_PRAYER:
+            try:
+                from prayer_scheduler import get_current_prayer
+                self.active_prayer = get_current_prayer()
+                print(f"[INFO] Waktu sholat aktif otomatis saat startup: {self.active_prayer}")
+            except Exception as e:
+                print(f"[WARNING] Gagal melakukan deteksi sholat otomatis: {e}. Menggunakan default: Subuh")
+                self.active_prayer = "Subuh"
+                
         self.state_machine = SholatStateMachine(self.active_prayer)
         self.audio_player = AudioPlayer()
         self.button_listener = ButtonListener(callback=self.reset_from_button)
