@@ -333,3 +333,11 @@ GPIO_RESET_PIN  = 85     # Pin GPIO Orange Pi 4 Pro (Physical Pin 7 = GPIO2_C5 =
 AUTO_DETECT_PRAYER = True        # Aktifkan deteksi sholat otomatis saat startup berdasarkan jam sistem
 PRAYER_OFFSET_MINUTES = 30       # Masuk waktu sholat X menit lebih awal (misal: 30 menit sebelum Subuh)
 
+
+# ─────────────────────────────────────────────────────────────
+# 11. BOT TELEGRAM NOTIFIKASI (IoT)
+# ─────────────────────────────────────────────────────────────
+USE_TELEGRAM = True
+TELEGRAM_BOT_TOKEN = "8805267299:AAFryK-zIgfeLoFnKccEAC6kXDiswugr6RM"
+TELEGRAM_CHAT_ID = ""  # Kosongkan terlebih dahulu. Sistem akan mendeteksi otomatis saat startup.
+

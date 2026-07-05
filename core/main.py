@@ -45,7 +45,10 @@ from config import (
     KEY_CALIBRATE,
     USE_GPIO_BUTTON,
     GPIO_RESET_PIN,
-    AUTO_DETECT_PRAYER
+    AUTO_DETECT_PRAYER,
+    USE_TELEGRAM,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID
 )
 from pose_utils import get_coords
 from pose_classifier import classify_pose, get_pose_features
@@ -259,6 +262,41 @@ class GemaImamApp:
         self.start_timestamp = None
         self.imam_mistakes_count = 0
 
+        # Inisialisasi Detektor Chat ID Telegram otomatis saat startup jika kosong
+        if USE_TELEGRAM and not TELEGRAM_CHAT_ID:
+            self.run_telegram_setup_helper()
+
+    def run_telegram_setup_helper(self):
+        """Membantu mendeteksi Chat ID pengguna secara non-blocking."""
+        def helper():
+            import time
+            from telegram_notifier import get_telegram_chat_id
+            print("\n" + "-" * 55)
+            print("[TELEGRAM] ⚠️ Chat ID belum diatur di config.py!")
+            print("[TELEGRAM] Silakan buka aplikasi Telegram Anda, cari Bot: @GemalmamBot")
+            print("[TELEGRAM] Kirim pesan apa saja (misal: /start atau halo) ke bot tersebut.")
+            print("[TELEGRAM] Menunggu deteksi Chat ID otomatis...")
+            print("-" * 55)
+            
+            # Polling selama 15 detik
+            for _ in range(15):
+                chats = get_telegram_chat_id()
+                if chats:
+                    print("\n" + "=" * 55)
+                    print("[TELEGRAM] BERHASIL MENEMUKAN CHAT ID!")
+                    print("=" * 55)
+                    for c_id, name in chats.items():
+                        print(f"  ID: {c_id} (Pengirim: {name})")
+                    print("\n[TELEGRAM] Salin salah satu ID di atas dan masukkan ke:")
+                    print("           TELEGRAM_CHAT_ID = \"ID_DI_ATAS\" di file config.py")
+                    print("=" * 55 + "\n")
+                    return
+                time.sleep(2.0)
+            print("[TELEGRAM WARNING] Waktu deteksi habis. Kirim pesan ke bot lalu restart program untuk mendeteksi kembali.\n")
+            
+        thread = threading.Thread(target=helper, daemon=True)
+        thread.start()
+
     def play_niat_audio(self):
         """Memutar audio niat sholat yang aktif."""
         self.audio_player.clear()  # Bersihkan audio sebelumnya
@@ -394,6 +432,28 @@ class GemaImamApp:
             print(" SKOR TUMA'NINAH: N/A (Belum melakukan gerakan ruku/sujud)")
         print(f" KESALAHAN IMAM : {self.imam_mistakes_count} kali (gerakan mendahului bacaan)")
         print("=" * 55 + "\n")
+        
+        # 3. Kirim laporan ke Bot Telegram (jika diaktifkan)
+        if USE_TELEGRAM and TELEGRAM_CHAT_ID:
+            tumaninah_kpi = f"{tumaninah_score:.1f}% ({total_tumaninah_success}/{total_tumaninah_check})" if total_tumaninah_check > 0 else "N/A"
+            msg = (
+                "🕌 *GEMA Imam — Laporan Sholat*\n"
+                "---------------------------------\n"
+                f"• *Sholat* : {self.active_prayer}\n"
+                f"• *Tanggal*: {self.start_timestamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"• *Status* : {status_str}\n"
+                f"• *Durasi* : {round(duration, 1)} detik\n"
+                f"• *Rakaat* : {self.state_machine.rakaat_count}\n"
+                "---------------------------------\n"
+                f"📊 *KPI Evaluasi*:\n"
+                f"• *Skor Tuma'ninah*: {tumaninah_kpi}\n"
+                f"• *Kesalahan Imam*: {self.imam_mistakes_count} kali\n"
+            )
+            try:
+                from telegram_notifier import send_telegram_message_async
+                send_telegram_message_async(msg)
+            except Exception as e:
+                print(f"[TELEGRAM WARNING] Gagal memicu pengiriman telegram: {e}")
 
     def run(self):
         camera_index = ACTIVE_PROFILE["camera_index"]
