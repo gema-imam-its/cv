@@ -266,6 +266,16 @@ class GemaImamApp:
         if USE_TELEGRAM and not TELEGRAM_CHAT_ID:
             self.run_telegram_setup_helper()
 
+        # Mulai Telegram command listener (jika chat ID sudah dikonfigurasi)
+        self.telegram_listener = None
+        if USE_TELEGRAM and TELEGRAM_CHAT_ID:
+            try:
+                from telegram_notifier import TelegramCommandListener
+                self.telegram_listener = TelegramCommandListener(app_ref=self)
+                self.telegram_listener.start()
+            except Exception as e:
+                print(f"[TELEGRAM CMD WARNING] Gagal memulai command listener: {e}")
+
     def run_telegram_setup_helper(self):
         """Membantu mendeteksi Chat ID pengguna secara non-blocking."""
         def helper():
@@ -736,6 +746,8 @@ class GemaImamApp:
             self.save_session_logs(force_cancel=True)
         finally:
             self.button_listener.stop()
+            if self.telegram_listener:
+                self.telegram_listener.stop()
             cap.release()
             if HAS_DISPLAY:
                 cv2.destroyAllWindows()
