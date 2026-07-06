@@ -302,6 +302,14 @@ class GemaImamApp:
         self.audio_player.clear()  # Bersihkan audio sebelumnya
         if self.active_prayer == "Subuh":
             self.audio_player.play(AUDIO_EXTRA["niat_subuh"])
+        elif self.active_prayer == "Dzuhur":
+            self.audio_player.play(AUDIO_EXTRA["niat_dzuhur"])
+        elif self.active_prayer == "Ashar":
+            self.audio_player.play(AUDIO_EXTRA["niat_ashar"])
+        elif self.active_prayer == "Maghrib":
+            self.audio_player.play(AUDIO_EXTRA["niat_maghrib"])
+        elif self.active_prayer == "Isya":
+            self.audio_player.play(AUDIO_EXTRA["niat_isya"])
         else:
             print(f"[AUDIO] Niat untuk sholat {self.active_prayer} tidak tersedia di folder audio.")
 

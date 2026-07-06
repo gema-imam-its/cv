@@ -290,6 +290,10 @@ AUDIO_TRANSITION_MAP = {
 # Audio tambahan per sholat (niat, Al-Fatihah, Surat)
 AUDIO_EXTRA = {
     "niat_subuh":   "niat-subuh.WAV",
+    "niat_dzuhur":  "niat-dzuhur.WAV",
+    "niat_ashar":   "niat-ashar.WAV",
+    "niat_maghrib": "niat-maghrib.WAV",
+    "niat_isya":    "niat-isya.WAV",
     "alfatihah":    "alfatihah.WAV",
     "surat":        "al-ikhlas.WAV",     # Surat/ayat pendek default
 }
