@@ -19,3 +19,11 @@ logs/.gitkeep
 .idea/
 .DS_Store
 Thumbs.db
+
+# Konfigurasi rahasia lokal (jangan pernah commit file ini!)
+secrets.py
+secrets_local.py
+.env
+
+# Kalibrasi lokal per perangkat (tidak perlu di-share)
+calibration.json

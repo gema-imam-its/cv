@@ -363,6 +363,28 @@ class GemaImamApp:
         """Memulai pencatatan log waktu mulai sesi sholat."""
         self.start_timestamp = datetime.now()
 
+    def rotate_logs(self, max_sessions=60):
+        """
+        Membatasi jumlah file log agar eMMC Orange Pi tidak penuh.
+        Hapus sesi terlama jika melebihi max_sessions sesi.
+        Satu sesi = 1 pasang file .csv + .json.
+        """
+        try:
+            json_files = sorted(
+                [f for f in os.listdir(LOGS_DIR) if f.endswith(".json")]
+            )  # sudah urut nama = urut waktu
+            if len(json_files) > max_sessions:
+                to_delete = json_files[:len(json_files) - max_sessions]
+                for fname in to_delete:
+                    base = fname.replace(".json", "")
+                    for ext in (".json", ".csv"):
+                        fpath = os.path.join(LOGS_DIR, base + ext)
+                        if os.path.exists(fpath):
+                            os.remove(fpath)
+                print(f"[LOGGER] Rotasi log: {len(to_delete)} sesi lama dihapus (maks {max_sessions} sesi).")
+        except Exception as e:
+            print(f"[WARNING] Gagal rotasi log: {e}")
+
     def save_session_logs(self, force_cancel=False):
         """Menyimpan log transisi gerakan (CSV) dan ringkasan sesi (JSON)."""
         if not self.start_timestamp:
@@ -473,6 +495,9 @@ class GemaImamApp:
                 send_telegram_message(msg)
             except Exception as e:
                 print(f"[TELEGRAM WARNING] Gagal mengirim laporan telegram: {e}")
+
+        # 4. Rotasi log — hapus sesi terlama jika sudah > 60 sesi
+        self.rotate_logs(max_sessions=60)
 
     def run(self):
         camera_index = ACTIVE_PROFILE["camera_index"]
@@ -743,6 +768,25 @@ class GemaImamApp:
                         
         except KeyboardInterrupt:
             print("\n[INFO] Program dihentikan via KeyboardInterrupt.")
+            self.save_session_logs(force_cancel=True)
+        except Exception as crash_err:
+            # Crash tak terduga — catat dan kirim notifikasi Telegram
+            import traceback
+            tb_str = traceback.format_exc()
+            print(f"\n[CRITICAL] Program crash: {crash_err}")
+            print(tb_str)
+            if USE_TELEGRAM and TELEGRAM_CHAT_ID:
+                try:
+                    from telegram_notifier import send_telegram_message
+                    crash_msg = (
+                        f"GEMA Imam - CRASH\n"
+                        f"Error: {type(crash_err).__name__}: {crash_err}\n"
+                        f"---\n"
+                        f"{tb_str[-800:]}"  # kirim 800 char terakhir traceback
+                    )
+                    send_telegram_message(crash_msg)
+                except Exception:
+                    pass
             self.save_session_logs(force_cancel=True)
         finally:
             self.button_listener.stop()

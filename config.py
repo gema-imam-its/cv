@@ -342,6 +342,22 @@ PRAYER_OFFSET_MINUTES = 30       # Masuk waktu sholat X menit lebih awal (misal:
 # 11. BOT TELEGRAM NOTIFIKASI (IoT)
 # ─────────────────────────────────────────────────────────────
 USE_TELEGRAM = True
-TELEGRAM_BOT_TOKEN = "8805267299:AAFryK-zIgfeLoFnKccEAC6kXDiswugr6RM"
-TELEGRAM_CHAT_ID = ""  # Kosongkan terlebih dahulu. Sistem akan mendeteksi otomatis saat startup.
 
+# Muat environment variable dari file .env (lokal, tidak di-commit ke GitHub)
+_env_path = os.path.join(BASE_DIR, ".env")
+if os.path.exists(_env_path):
+    try:
+        with open(_env_path, "r") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line or _line.startswith("#"):
+                    continue
+                if "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    # Bersihkan spasi dan tanda petik
+                    os.environ[_k.strip()] = _v.strip().strip("'\"")
+    except Exception as _e:
+        print(f"[WARNING] Gagal membaca file .env: {_e}")
+
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "isi_token_bot_anda_di_sini")
+TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
