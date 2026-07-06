@@ -458,10 +458,11 @@ class GemaImamApp:
                 f"• *Kesalahan Imam*: {self.imam_mistakes_count} kali\n"
             )
             try:
-                from telegram_notifier import send_telegram_message_async
-                send_telegram_message_async(msg)
+                from telegram_notifier import send_telegram_message
+                print("[TELEGRAM] Mengirim laporan KPI ke Telegram...")
+                send_telegram_message(msg)
             except Exception as e:
-                print(f"[TELEGRAM WARNING] Gagal memicu pengiriman telegram: {e}")
+                print(f"[TELEGRAM WARNING] Gagal mengirim laporan telegram: {e}")
 
     def run(self):
         camera_index = ACTIVE_PROFILE["camera_index"]
