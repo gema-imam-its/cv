@@ -17,6 +17,9 @@ mediapipe==0.10.14
 # Numerical computation (sudah ter-include saat install mediapipe, tapi eksplisit lebih aman)
 numpy>=1.24.0
 
+# HTTP client — digunakan oleh telegram_notifier.py untuk mengirim notifikasi Telegram
+requests>=2.31.0
+
 # Tidak ada dependency lain yang dibutuhkan:
 # - csv    → sudah built-in Python
 # - json   → sudah built-in Python
