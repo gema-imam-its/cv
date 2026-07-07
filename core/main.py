@@ -58,6 +58,18 @@ import visualizer
 # Cek support display GUI
 HAS_DISPLAY = "DISPLAY" in os.environ or os.name == "nt"
 
+def get_cpu_temp():
+    """Membaca suhu CPU Orange Pi (Linux). Mengembalikan derajat Celsius atau None."""
+    try:
+        temp_path = "/sys/class/thermal/thermal_zone0/temp"
+        if os.path.exists(temp_path):
+            with open(temp_path, "r") as f:
+                temp_str = f.read().strip()
+                return round(float(temp_str) / 1000.0, 1)
+    except Exception:
+        pass
+    return None
+
 # Daftar file audio bacaan sholat yang wajib/sunnah diselesaikan (jika terpotong dianggap kesalahan Imam)
 READING_AUDIOS = {
     "alfatihah.WAV", "al-ikhlas.WAV", "ruku.WAV", "itidal.WAV",
@@ -261,6 +273,7 @@ class GemaImamApp:
         # Data logger
         self.start_timestamp = None
         self.imam_mistakes_count = 0
+        self.prev_shoulder_center = None
 
         # Inisialisasi Detektor Chat ID Telegram otomatis saat startup jika kosong
         if USE_TELEGRAM and not TELEGRAM_CHAT_ID:
@@ -611,6 +624,7 @@ class GemaImamApp:
         last_results = None
         last_classified_pose = POSE.UNKNOWN
         last_features = {}
+        cpu_temp = None
         
         print("\n" + "=" * 55)
         if HAS_DISPLAY:
@@ -631,10 +645,54 @@ class GemaImamApp:
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
-                    print("[WARNING] Gagal mengambil frame.")
-                    break
+                    print("[WARNING] Kamera terputus! Mencoba menghubungkan kembali dalam 5 detik...")
+                    if USE_TELEGRAM and TELEGRAM_CHAT_ID:
+                        try:
+                            from telegram_notifier import send_telegram_message
+                            send_telegram_message("⚠️ *GEMA Imam - Kamera Terputus*\nSistem mendeteksi koneksi kamera terputus. Mencoba menghubungkan kembali...")
+                        except Exception:
+                            pass
+                    
+                    # Loop reconnect
+                    reconnect_success = False
+                    while not reconnect_success:
+                        time.sleep(5.0)
+                        print("[INFO] Mencoba menginisialisasi ulang kamera...")
+                        cap.release()
+                        
+                        if is_stream:
+                            cap = cv2.VideoCapture(camera_index)
+                        else:
+                            if backend_str == "v4l2":
+                                cap = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
+                            else:
+                                cap = cv2.VideoCapture(camera_index)
+                                
+                        if cap.isOpened():
+                            # Set resolusi kembali
+                            if not is_stream:
+                                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
+                                cap.set(cv2.CAP_PROP_FRAME_WIDTH, ACTIVE_PROFILE["camera_width"])
+                                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, ACTIVE_PROFILE["camera_height"])
+                                cap.set(cv2.CAP_PROP_BUFFERSIZE, ACTIVE_PROFILE["buffer_size"])
+                            
+                            ret_test, frame_test = cap.read()
+                            if ret_test:
+                                print("✅ Kamera berhasil terhubung kembali!")
+                                if USE_TELEGRAM and TELEGRAM_CHAT_ID:
+                                    try:
+                                        send_telegram_message("✅ *GEMA Imam - Kamera Tersambung*\nKamera berhasil terhubung kembali. Sistem melanjutkan pemantauan.")
+                                    except Exception:
+                                        pass
+                                reconnect_success = True
+                                break
+                    continue
                     
                 frame_count += 1
+                
+                # Baca suhu CPU setiap 150 frame (mengurangi I/O overhead)
+                if frame_count % 150 == 0:
+                    cpu_temp = get_cpu_temp()
                 
                 # Jeda jika aplikasi di-pause
                 if self.paused:
@@ -666,6 +724,20 @@ class GemaImamApp:
                     last_results = self.pose_detector.process(img_rgb)
                     
                     if last_results.pose_landmarks:
+                        # Cek kontinuitas tracking untuk mendeteksi gangguan multi-orang
+                        landmarks = last_results.pose_landmarks.landmark
+                        sh_l = [landmarks[LANDMARK.LEFT_SHOULDER].x, landmarks[LANDMARK.LEFT_SHOULDER].y]
+                        sh_r = [landmarks[LANDMARK.RIGHT_SHOULDER].x, landmarks[LANDMARK.RIGHT_SHOULDER].y]
+                        curr_center = [(sh_l[0] + sh_r[0]) / 2.0, (sh_l[1] + sh_r[1]) / 2.0]
+                        
+                        if self.prev_shoulder_center is not None:
+                            dist = np.sqrt((curr_center[0] - self.prev_shoulder_center[0])**2 + 
+                                           (curr_center[1] - self.prev_shoulder_center[1])**2)
+                            if dist > 0.25:  # Lompatan lebih dari 25% area frame dalam 1 frame
+                                print(f"[WARNING] Tracking jump terdeteksi (dist: {dist:.3f}). Kemungkinan terganggu orang lain di frame kamera.")
+                        
+                        self.prev_shoulder_center = curr_center
+
                         # 1. Klasifikasi pose saat ini
                         last_classified_pose = classify_pose(last_results.pose_landmarks)
                         
@@ -775,7 +847,8 @@ class GemaImamApp:
                         self.state_machine.rakaat_count,
                         fps,
                         self.state_machine.hold_counter,
-                        self.state_machine.max_hold_frames
+                        self.state_machine.max_hold_frames,
+                        cpu_temp
                     )
                     
                     # Rendering info kalibrasi jika sedang berjalan
@@ -819,7 +892,8 @@ class GemaImamApp:
                 else:
                     # Headless Mode console logs
                     if frame_count % 30 == 0:
-                        print(f"[Headless] Frame: {frame_count} | FPS: {fps:.1f} | Pose: {last_classified_pose} | State: {self.state_machine.current_state} (Rakaat {self.state_machine.rakaat_count})")
+                        temp_str = f" | CPU Temp: {cpu_temp}°C" if cpu_temp is not None else ""
+                        print(f"[Headless] Frame: {frame_count} | FPS: {fps:.1f} | Pose: {last_classified_pose} | State: {self.state_machine.current_state} (Rakaat {self.state_machine.rakaat_count}){temp_str}")
                     
                     # Otomatis berhenti setelah 500 frame di headless mode (untuk benchmark)
                     if frame_count >= 500:

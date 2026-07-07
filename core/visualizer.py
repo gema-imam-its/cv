@@ -85,7 +85,7 @@ def draw_skeleton(frame, lm, color_theme=(0, 255, 100)):
             else:
                 cv2.circle(frame, pt, 4, color_theme, -1)
 
-def draw_hud(frame, state, active_prayer, rakaat, fps, hold_counter, max_hold):
+def draw_hud(frame, state, active_prayer, rakaat, fps, hold_counter, max_hold, cpu_temp=None):
     """
     Menggambar HUD Card dengan gaya glassmorphism semi-transparan untuk
     menampilkan informasi sesi sholat saat ini.
@@ -111,6 +111,11 @@ def draw_hud(frame, state, active_prayer, rakaat, fps, hold_counter, max_hold):
     cv2.putText(frame, f"Rakaat: {rakaat}", (25, 65), 
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 220, 220), 1, cv2.LINE_AA)
     
+    # CPU Temp
+    if cpu_temp is not None:
+        cv2.putText(frame, f"Temp: {cpu_temp}C", (125, 65), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (160, 200, 255), 1, cv2.LINE_AA)
+        
     # FPS
     cv2.putText(frame, f"FPS: {fps:.1f}", (240, 65), 
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (160, 160, 160), 1, cv2.LINE_AA)

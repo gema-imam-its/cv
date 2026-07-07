@@ -1,4 +1,4 @@
-# GEMA Imam — Gerakan Elektronik Monitoring Amaliyah Imam
+# GEMA Imam
 
 > Sistem pemantauan gerakan sholat berbasis Computer Vision untuk membantu masjid memantau kualitas amaliyah imam secara real-time.
 

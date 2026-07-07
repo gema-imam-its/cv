@@ -110,3 +110,36 @@ Setiap memulai sesi di tempat baru, lakukan kalibrasi agar threshold ketinggian 
 Setiap kali sesi sholat diselesaikan (atau ditekan `q` di tengah jalan), sistem akan menyimpan 2 file log di folder `logs/`:
 *   `sholat_NamaSholat_Tanggal_Waktu.csv`: Detail langkah transisi gerakan per rakaat.
 *   `sholat_NamaSholat_Tanggal_Waktu.json`: Ringkasan sesi sholat (total durasi, status selesai/batal, jumlah rakaat).
+
+---
+
+## 7. Mengaktifkan Autostart saat Boot (Systemd)
+
+Untuk memastikan sistem berjalan secara otomatis ketika Orange Pi dinyalakan kembali pasca mati listrik (power loss), Anda dapat mengonfigurasi systemd service:
+
+1. **Salin berkas unit service**:
+   ```bash
+   sudo cp gema-imam.service /etc/systemd/system/
+   ```
+
+2. **Muat ulang konfigurasi systemd**:
+   ```bash
+   sudo systemctl daemon-reload
+   ```
+
+3. **Aktifkan service agar otomatis menyala saat boot**:
+   ```bash
+   sudo systemctl enable gema-imam.service
+   ```
+
+4. **Jalankan service sekarang**:
+   ```bash
+   sudo systemctl start gema-imam.service
+   ```
+
+5. **Memantau status & log service**:
+   ```bash
+   sudo systemctl status gema-imam.service
+   journalctl -u gema-imam.service -f
+   ```
+
