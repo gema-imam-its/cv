@@ -4,9 +4,9 @@
 
 <h1>GEMA Imam</h1>
 
-**Gerakan Elektronik Monitoring Amaliyah Imam**
+**GEMA Imam**
 
-*Sistem Pemantauan Gerakan Sholat Berbasis Computer Vision untuk Masjid*
+*Program Pendampingan Kemandirian Ibadah melalui Integrasi Sensor Visual menjadi Audio di SLB Paedagogia Surabaya*
 
 <br/>
 
@@ -18,9 +18,9 @@
 
 <br/>
 
-> **Proyek Unggulan PKM-KC — Institut Teknologi Sepuluh Nopember (ITS) Surabaya**
+> **Proyek Unggulan PKM-PM — Institut Teknologi Sepuluh Nopember (ITS) Surabaya**
 >
-> Diadaptasi dari hasil penelitian terapan untuk solusi nyata di lingkungan masjid.
+> Diadaptasi dari hasil penelitian terapan untuk solusi nyata di lingkungan SLB Paedagogia.
 
 <br/>
 
@@ -51,9 +51,7 @@
 
 ## Latar Belakang
 
-Kualitas amaliyah (gerakan) sholat seorang imam memiliki dampak langsung terhadap keabsahan sholat makmum yang berada di belakangnya. Di banyak masjid, tidak terdapat mekanisme objektif dan konsisten untuk memantau apakah gerakan imam sudah memenuhi rukun sholat, khususnya **tuma'ninah** (ketenangan minimal pada setiap gerakan).
-
-**GEMA Imam** hadir sebagai solusi berbasis IoT dan *Computer Vision* yang dapat dipasang secara permanen di dalam masjid. Sistem ini memantau, mengevaluasi, dan melaporkan kualitas amaliyah imam secara otomatis menggunakan kamera yang terhubung ke *Single Board Computer* (Orange Pi 4 Pro) — tanpa memerlukan intervensi manusia secara aktif selama proses sholat berlangsung.
+Siswa tunawicara di **SLB Paedagogia Surabaya** menghadapi kendala saat memimpin salat berjamaah karena harus bergantung pada audio kaku dari laptop akibat ketiadaan guru laki-laki, ditambah lagi dengan absennya mata pelajaran Pendidikan Agama Islam yang menyulitkan para siswa dalam mempelajari tata cara salat. Menjawab permasalahan tersebut, diusulkanlah "Program Gema Imam", sebuah program pengabdian masyarakat yang memanfaatkan teknologi Computer Vision untuk merespons gerakan imam menjadi audio takbir secara otomatis, serta mengintegrasikan Learning Management System (LMS) sebagai platform edukasi inklusif yang mendukung hak penyandang disabilitas dalam belajar dan melaksanakan ibadah secara lebih mandiri.
 
 ---
 
