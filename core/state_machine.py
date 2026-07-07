@@ -95,13 +95,13 @@ class SholatStateMachine:
             return [POSE.BERSEDEKAP]
             
         elif self.current_state == POSE.DUDUK_TASYAHUD_AKHIR:
-            return [POSE.SALAM_KE_KANAN, POSE.SALAM_KE_KIRI]
+            return [POSE.SALAM_KE_KANAN]
             
         elif self.current_state == POSE.SALAM_KE_KANAN:
-            return [POSE.SALAM_KE_KIRI, POSE.SELESAI]
+            return [POSE.SALAM_KE_KIRI]
             
         elif self.current_state == POSE.SALAM_KE_KIRI:
-            return [POSE.SALAM_KE_KANAN, POSE.SELESAI]
+            return [POSE.SELESAI]
             
         elif self.current_state == POSE.SELESAI:
             return []
@@ -159,6 +159,21 @@ class SholatStateMachine:
 
         # --- VALIDASI TRANSISI ---
         allowed_next = self.get_allowed_next_states()
+        
+        # Catat gerakan menyimpang (tidak tenang / tidak sesuai) selama state berjalan
+        if self.completed_steps:
+            active_step = self.completed_steps[-1]
+            if active_step.get("exit_time") is None:
+                # Jika pose terdeteksi berbeda dengan state sekarang, bukan UNKNOWN,
+                # dan bukan salah satu dari allowed_next (karena itu transisi valid)
+                if (detected_pose != self.current_state 
+                        and detected_pose not in allowed_next 
+                        and detected_pose != POSE.UNKNOWN):
+                    display_pose = POSE.DISPLAY_NAME.get(detected_pose, detected_pose)
+                    if "gerakan_menyimpang" not in active_step or active_step["gerakan_menyimpang"] is None:
+                        active_step["gerakan_menyimpang"] = []
+                    if display_pose not in active_step["gerakan_menyimpang"]:
+                        active_step["gerakan_menyimpang"].append(display_pose)
         
         if detected_pose in allowed_next:
             if self.target_state != detected_pose:
@@ -231,6 +246,7 @@ class SholatStateMachine:
             "duration_seconds": None,
             "tumaninah_met": None,
             "bacaan_terpotong": None,
+            "gerakan_menyimpang": [],
             "hip_angle": round(features.get("hip_angle", 0.0), 1) if (features and "hip_angle" in features) else "-",
             "knee_angle": round(features.get("knee_angle", 0.0), 1) if (features and "knee_angle" in features) else "-",
             "arm_angle": round(features.get("arm_angle", 0.0), 1) if (features and "arm_angle" in features) else "-",

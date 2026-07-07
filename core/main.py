@@ -486,6 +486,7 @@ class GemaImamApp:
                     "Durasi (Detik)", 
                     "Tuma'ninah Terpenuhi", 
                     "Kesalahan (Bacaan Terpotong)",
+                    "Gerakan Menyimpang (Jitter)",
                     "Sudut Pinggul (Hip Degree)",
                     "Sudut Lutut (Knee Degree)",
                     "Sudut Lengan (Arm Degree)",
@@ -500,6 +501,9 @@ class GemaImamApp:
                     elif tumaninah_met_val is False:
                         tumaninah_str = "Tidak"
                         
+                    dev_mv = step.get("gerakan_menyimpang", [])
+                    dev_mv_str = ", ".join(dev_mv) if dev_mv else "-"
+                        
                     writer.writerow([
                         step.get("rakaat", 1),
                         POSE.DISPLAY_NAME.get(step.get("state"), step.get("state", "UNKNOWN")),
@@ -508,6 +512,7 @@ class GemaImamApp:
                         step.get("duration_seconds") if step.get("duration_seconds") is not None else "-",
                         tumaninah_str,
                         f"Ya (Bacaan: {step.get('bacaan_terpotong')})" if step.get("bacaan_terpotong") else "-",
+                        dev_mv_str,
                         step.get("hip_angle", "-"),
                         step.get("knee_angle", "-"),
                         step.get("arm_angle", "-"),
@@ -576,11 +581,17 @@ class GemaImamApp:
                 f"• *Kesalahan Imam*: {self.imam_mistakes_count} kali\n"
             )
             try:
-                from telegram_notifier import send_telegram_message
+                from telegram_notifier import send_telegram_message, send_telegram_document
                 print("[TELEGRAM] Mengirim laporan KPI ke Telegram...")
                 send_telegram_message(msg)
+                
+                # Kirim file CSV dan JSON langsung secara otomatis!
+                if os.path.exists(csv_filename):
+                    send_telegram_document(csv_filename, caption=f"Detail Gerakan: {os.path.basename(csv_filename)}")
+                if os.path.exists(json_filename):
+                    send_telegram_document(json_filename, caption=f"Ringkasan Sesi: {os.path.basename(json_filename)}")
             except Exception as e:
-                print(f"[TELEGRAM WARNING] Gagal mengirim laporan telegram: {e}")
+                print(f"[TELEGRAM WARNING] Gagal mengirim laporan/dokumen telegram: {e}")
 
         # 4. Rotasi log — hapus sesi terlama jika sudah > 60 sesi
         self.rotate_logs(max_sessions=60)
@@ -855,16 +866,19 @@ class GemaImamApp:
                             except Exception:
                                 pass
                 
-                # Auto-exit jika sholat sudah SELESAI atau audio salam kedua selesai diputar
+                # Penanganan akhir sholat (salam kedua selesai) -> auto-reset untuk sholat berikutnya
                 if self.state_machine.current_state == POSE.SELESAI:
-                    print("[INFO] Sholat telah selesai dengan sempurna. Menutup program...")
-                    break
+                    print("[INFO] Sholat telah selesai dengan sempurna. Menyimpan log dan melakukan auto-reset...")
+                    self.save_session_logs(force_cancel=False)
+                    self.state_machine.reset()
+                    self.audio_player.clear()
+                    self.imam_mistakes_count = 0
+                    self.start_timestamp = None
                 elif self.state_machine.current_state == POSE.SALAM_KE_KIRI:
                     if self.audio_player.queue.empty() and not self.audio_player.current_playing_file:
-                        print("[INFO] Audio Salam Ke Kiri selesai diputar. Menunggu jeda 2 detik sebelum menutup...")
-                        time.sleep(2.0)
-                        self.state_machine.current_state = POSE.SELESAI
-                        break
+                        print("[INFO] Audio Salam Ke Kiri selesai diputar. Menunggu jeda 5 detik...")
+                        time.sleep(5.0)
+                        self.state_machine._commit_transition(POSE.SELESAI, last_features)
                                 
                 # Hitung FPS
                 elapsed = time.time() - start_time
