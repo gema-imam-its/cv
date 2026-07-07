@@ -69,6 +69,51 @@ class TestSholatStateMachine(unittest.TestCase):
         self.assertEqual(self.sm.current_state, POSE.SELESAI)
         self.assertEqual(self.sm.rakaat_count, 2)
 
+    def test_tasyahud_awal_dhuhur(self):
+        """
+        Simulasi sholat Dhuhur (4 rakaat) hingga selesai tasyahud awal di rakaat 2.
+        Setelah tasyahud awal: state harus langsung BERSEDEKAP (bukan BERDIRI_TEGAK)
+        dan rakaat_count harus bertambah menjadi 3.
+        """
+        sm = SholatStateMachine("Dhuhur")  # tasyahud_awal_after=2, total=4
+
+        def sim(pose):
+            t = None
+            for _ in range(sm.max_hold_frames):
+                t = sm.update(pose)
+            return t
+
+        # Rakaat 1
+        sim(POSE.BERDIRI_TEGAK)
+        sim(POSE.BERSEDEKAP)
+        sim(POSE.RUKUK)
+        sim(POSE.ITIDAL)
+        sim(POSE.SUJUD_PERTAMA)
+        sim(POSE.DUDUK_DI_ANTARA_DUA_SUJUD)
+        sim(POSE.SUJUD_KEDUA)
+
+        # Transisi ke Rakaat 2 — harus BERSEDEKAP, rakaat jadi 2
+        sim(POSE.BERSEDEKAP)
+        self.assertEqual(sm.rakaat_count, 2)
+        self.assertEqual(sm.current_state, POSE.BERSEDEKAP)
+
+        # Rakaat 2
+        sim(POSE.RUKUK)
+        sim(POSE.ITIDAL)
+        sim(POSE.SUJUD_PERTAMA)
+        sim(POSE.DUDUK_DI_ANTARA_DUA_SUJUD)
+        sim(POSE.SUJUD_KEDUA)
+
+        # Rakaat 2 = tasyahud_awal_after → harus masuk DUDUK_TASYAHUD_AWAL
+        sim(POSE.DUDUK_TASYAHUD_AWAL)
+        self.assertEqual(sm.current_state, POSE.DUDUK_TASYAHUD_AWAL)
+        self.assertEqual(sm.rakaat_count, 2)  # belum bertambah
+
+        # Bangkit dari tasyahud awal → harus langsung ke BERSEDEKAP, rakaat jadi 3
+        sim(POSE.BERSEDEKAP)
+        self.assertEqual(sm.current_state, POSE.BERSEDEKAP)
+        self.assertEqual(sm.rakaat_count, 3)  # rakaat bertambah saat commit BERSEDEKAP
+
     def _simulate_pose(self, pose):
         # Helper untuk commit pose (kirim max_hold_frames)
         transition = None

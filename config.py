@@ -281,7 +281,8 @@ AUDIO_TRANSITION_MAP = {
     (POSE.SUJUD_KEDUA, POSE.BERDIRI_TEGAK):          "takbir.WAV",    # Bangkit berdiri (fallback)
     (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AWAL):   "takbir.WAV",    # Duduk tasyahud awal
     (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AKHIR):  "takbir.WAV",    # Duduk tasyahud akhir
-    (POSE.DUDUK_TASYAHUD_AWAL, POSE.BERDIRI_TEGAK):  "takbir.WAV",    # Bangkit dari tasyahud awal ke rakaat berikutnya
+    (POSE.DUDUK_TASYAHUD_AWAL, POSE.BERDIRI_TEGAK):  "takbir.WAV",    # Bangkit dari tasyahud awal (fallback berdiri)
+    (POSE.DUDUK_TASYAHUD_AWAL, POSE.BERSEDEKAP):     "takbir.WAV",    # Bangkit dari tasyahud awal langsung bersedekap
 
     # Tasmi' — diucapkan saat bangkit dari Rukuk
     (POSE.RUKUK,    POSE.ITIDAL):                   "tasmi.WAV",     # "Sami'allahu liman hamidah"

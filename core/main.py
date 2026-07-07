@@ -136,7 +136,20 @@ class AudioPlayer:
         if player:
             print(f"[AUDIO] Menggunakan player: {player}")
         else:
-            print("[AUDIO WARNING] Tidak ada audio player yang ditemukan (aplay/paplay/ffplay). Suara dinonaktifkan.")
+            warn_msg = "[AUDIO WARNING] Tidak ada audio player yang ditemukan (aplay/paplay/ffplay). Suara dinonaktifkan."
+            print(warn_msg)
+            # Kirim notifikasi Telegram jika tersedia
+            try:
+                from config import USE_TELEGRAM, TELEGRAM_CHAT_ID
+                if USE_TELEGRAM and TELEGRAM_CHAT_ID:
+                    from telegram_notifier import send_telegram_message_async
+                    send_telegram_message_async(
+                        "\u26a0\ufe0f *GEMA Imam - Speaker Tidak Terdeteksi*\n"
+                        "Sistem tidak menemukan audio player yang didukung (aplay/paplay/ffplay).\n"
+                        "Audio takbir tidak akan diputar. Periksa koneksi speaker dan pastikan `aplay` terinstall."
+                    )
+            except Exception:
+                pass
 
         while True:
             try:
@@ -274,6 +287,11 @@ class GemaImamApp:
         self.start_timestamp = None
         self.imam_mistakes_count = 0
         self.prev_shoulder_center = None
+        
+        # Deteksi imam tidak terdeteksi
+        self._no_imam_frames = 0
+        self._no_imam_notified = False
+        self._NO_IMAM_ALERT_FRAMES = 60 * 15  # ~60 detik pada 15fps (sesuaikan ke FPS platform)
 
         # Inisialisasi Detektor Chat ID Telegram otomatis saat startup jika kosong
         if USE_TELEGRAM and not TELEGRAM_CHAT_ID:
@@ -588,9 +606,21 @@ class GemaImamApp:
                 print("      Menggunakan backend: Auto")
                 
         if not cap.isOpened():
-            print(f"❌ GAGAL: Tidak bisa membuka kamera/stream: {camera_index}")
+            err_msg = f"❌ GAGAL: Tidak bisa membuka kamera/stream: {camera_index}"
+            print(err_msg)
             if is_stream:
                 print("Pastikan server stream di Windows sudah berjalan.")
+            # Kirim notifikasi Telegram sebelum exit
+            if USE_TELEGRAM and TELEGRAM_CHAT_ID:
+                try:
+                    from telegram_notifier import send_telegram_message
+                    send_telegram_message(
+                        "\u274c *GEMA Imam - Kamera Tidak Terdeteksi*\n"
+                        f"Sistem gagal membuka kamera (index: `{camera_index}`).\n"
+                        "Pastikan kamera USB terhubung dengan benar dan tidak digunakan oleh aplikasi lain."
+                    )
+                except Exception:
+                    pass
             sys.exit(1)
             
         # Set resolusi jika kamera lokal
@@ -737,6 +767,9 @@ class GemaImamApp:
                                 print(f"[WARNING] Tracking jump terdeteksi (dist: {dist:.3f}). Kemungkinan terganggu orang lain di frame kamera.")
                         
                         self.prev_shoulder_center = curr_center
+                        # Reset counter imam tidak terdeteksi
+                        self._no_imam_frames = 0
+                        self._no_imam_notified = False
 
                         # 1. Klasifikasi pose saat ini
                         last_classified_pose = classify_pose(last_results.pose_landmarks)
@@ -813,6 +846,28 @@ class GemaImamApp:
                                 self.calibrating = False
                                 self.calibration_samples = []
                                 print("[CALIBRATION] Selesai!")
+                
+                else:
+                    # Pose landmarks tidak terdeteksi — hitung frame tanpa imam
+                    self._no_imam_frames += 1
+                    if (self._no_imam_frames >= self._NO_IMAM_ALERT_FRAMES
+                            and not self._no_imam_notified
+                            and self.state_machine.current_state not in (POSE.SELESAI, POSE.UNKNOWN)):
+                        self._no_imam_notified = True
+                        print("[WARNING] Imam tidak terdeteksi selama >60 detik!")
+                        if USE_TELEGRAM and TELEGRAM_CHAT_ID:
+                            try:
+                                from telegram_notifier import send_telegram_message_async
+                                send_telegram_message_async(
+                                    "\u26a0\ufe0f *GEMA Imam - Imam Tidak Terdeteksi*\n"
+                                    "Sistem tidak dapat mendeteksi imam selama lebih dari 60 detik.\n"
+                                    "Kemungkinan penyebab:\n"
+                                    "\u2022 Imam keluar dari jangkauan kamera\n"
+                                    "\u2022 Pencahayaan ruangan terlalu gelap\n"
+                                    "\u2022 Kamera terhalang benda asing"
+                                )
+                            except Exception:
+                                pass
                 
                 # Auto-exit jika sholat sudah SELESAI atau audio salam kedua selesai diputar
                 if self.state_machine.current_state == POSE.SELESAI:

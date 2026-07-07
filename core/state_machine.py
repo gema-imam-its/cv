@@ -90,7 +90,9 @@ class SholatStateMachine:
             return next_states
             
         elif self.current_state == POSE.DUDUK_TASYAHUD_AWAL:
-            return [POSE.BERDIRI_TEGAK]
+            # Setelah tasyahud awal, langsung ke BERSEDEKAP rakaat berikutnya
+            # (imam berdiri lalu langsung bersedekap dengan takbir — sama seperti dari sujud kedua)
+            return [POSE.BERSEDEKAP]
             
         elif self.current_state == POSE.DUDUK_TASYAHUD_AKHIR:
             return [POSE.SALAM_KE_KANAN, POSE.SALAM_KE_KIRI]
@@ -119,9 +121,10 @@ class SholatStateMachine:
         if self.current_state == POSE.RUKUK and detected_pose == POSE.BERDIRI_TEGAK:
             detected_pose = POSE.ITIDAL
 
-        # 2. Pemetaan BERDIRI_TEGAK ke BERSEDEKAP jika bangkit dari Sujud Kedua
-        #    (rakaat 2+: langsung bersedekap dengan takbir, tanpa berdiri tegak dulu)
-        if self.current_state == POSE.SUJUD_KEDUA and detected_pose == POSE.BERDIRI_TEGAK:
+        # 2. Pemetaan BERDIRI_TEGAK ke BERSEDEKAP jika:
+        #    a) Bangkit dari Sujud Kedua (rakaat 2+)
+        #    b) Bangkit dari Tasyahud Awal (langsung bersedekap dengan takbir)
+        if self.current_state in (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AWAL) and detected_pose == POSE.BERDIRI_TEGAK:
             next = self.get_allowed_next_states()
             if POSE.BERSEDEKAP in next:
                 detected_pose = POSE.BERSEDEKAP
@@ -192,12 +195,9 @@ class SholatStateMachine:
         
         # Logika increment rakaat
         if new_state == POSE.BERSEDEKAP:
-            # Rakaat bertambah ketika bersedekap setelah sujud kedua (rakaat 2+)
-            if old_state in (POSE.SUJUD_KEDUA,):
+            # Rakaat bertambah ketika bersedekap setelah sujud kedua ATAU setelah tasyahud awal
+            if old_state in (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AWAL):
                 self.rakaat_count += 1
-            # Rakaat bertambah juga ketika berdiri dari tasyahud awal
-            elif old_state == POSE.DUDUK_TASYAHUD_AWAL:
-                pass  # increment sudah terjadi saat transisi BERDIRI_TEGAK
             if self.is_first_sedekap:
                 self.is_first_sedekap = False
             
