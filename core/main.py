@@ -428,12 +428,40 @@ class GemaImamApp:
                     
         tumaninah_score = (total_tumaninah_success / total_tumaninah_check * 100.0) if total_tumaninah_check > 0 else 100.0
         
-        # 1. Simpan CSV (Detail Gerakan Rakaat demi Rakaat)
+        # 1. Simpan CSV (Detail Gerakan Rakaat demi Rakaat dengan Metadata Rinci)
         csv_filename = os.path.join(LOGS_DIR, f"sholat_{self.active_prayer}_{timestamp_str}.csv")
         try:
             with open(csv_filename, "w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(["Rakaat", "Gerakan/State", "Waktu Masuk", "Waktu Keluar", "Durasi (Detik)", "Tuma'ninah Terpenuhi", "Bacaan Terpotong (Kesalahan)"])
+                
+                # Metadata Sholat (Bagian Atas CSV)
+                writer.writerow(["=== METADATA SESI SHOLAT ==="])
+                writer.writerow(["Nama Sholat", self.active_prayer])
+                writer.writerow(["Waktu Mulai", self.start_timestamp.strftime("%Y-%m-%d %H:%M:%S")])
+                writer.writerow(["Durasi Total (Detik)", round(duration, 1)])
+                writer.writerow(["Status Akhir", status_str])
+                writer.writerow(["Rakaat Diselesaikan", self.state_machine.rakaat_count])
+                writer.writerow(["Total Kesalahan Imam", self.imam_mistakes_count])
+                tumaninah_kpi_str = f"{tumaninah_score:.1f}% ({total_tumaninah_success}/{total_tumaninah_check})" if total_tumaninah_check > 0 else "N/A"
+                writer.writerow(["Skor Tuma'ninah", tumaninah_kpi_str])
+                writer.writerow([])  # Baris Kosong Pemisah
+                
+                # Detail Gerakan Per Rakaat
+                writer.writerow(["=== DETAIL GERAKAN RAKAAT DEMI RAKAAT ==="])
+                writer.writerow([
+                    "Rakaat", 
+                    "Gerakan/State", 
+                    "Waktu Masuk", 
+                    "Waktu Keluar", 
+                    "Durasi (Detik)", 
+                    "Tuma'ninah Terpenuhi", 
+                    "Kesalahan (Bacaan Terpotong)",
+                    "Sudut Pinggul (Hip Degree)",
+                    "Sudut Lutut (Knee Degree)",
+                    "Sudut Lengan (Arm Degree)",
+                    "Jarak Pergelangan X (Wrist Dist X)",
+                    "Deviasi Kepala X (Head Offset X)"
+                ])
                 for step in self.state_machine.completed_steps:
                     tumaninah_met_val = step.get("tumaninah_met")
                     tumaninah_str = "N/A"
@@ -449,13 +477,18 @@ class GemaImamApp:
                         step.get("exit_time") if step.get("exit_time") else ("Selesai" if not force_cancel else "Batal"),
                         step.get("duration_seconds") if step.get("duration_seconds") is not None else "-",
                         tumaninah_str,
-                        step.get("bacaan_terpotong") if step.get("bacaan_terpotong") else "-"
+                        f"Ya (Bacaan: {step.get('bacaan_terpotong')})" if step.get("bacaan_terpotong") else "-",
+                        step.get("hip_angle", "-"),
+                        step.get("knee_angle", "-"),
+                        step.get("arm_angle", "-"),
+                        step.get("wrist_dist_x", "-"),
+                        step.get("head_offset_x", "-")
                     ])
             print(f"[LOGGER] Log CSV detail disimpan di: {csv_filename}")
         except Exception as e:
             print(f"[ERROR] Gagal menyimpan log CSV: {e}")
             
-        # 2. Simpan JSON (Ringkasan Sesi)
+        # 2. Simpan JSON (Ringkasan Sesi - Terstruktur Sama Persis)
         json_filename = os.path.join(LOGS_DIR, f"sholat_{self.active_prayer}_{timestamp_str}.json")
         summary = {
             "sholat": self.active_prayer,
@@ -636,9 +669,13 @@ class GemaImamApp:
                         # 1. Klasifikasi pose saat ini
                         last_classified_pose = classify_pose(last_results.pose_landmarks)
                         
-                        # 2. Update state machine sholat
+                        # Ambil fitur sendi/sudut untuk keperluan pencatatan log detail
+                        from pose_classifier import get_pose_features
+                        last_features = get_pose_features(last_results.pose_landmarks)
+                        
+                        # 2. Update state machine sholat dengan menyertakan fitur sendi
                         if not self.calibrating:
-                            transition_info = self.state_machine.update(last_classified_pose)
+                            transition_info = self.state_machine.update(last_classified_pose, last_features)
                             if transition_info:
                                 # Opsi 1: Hentikan audio yang sedang berjalan dan kosongkan antrean secara instan
                                 interrupted_files = self.audio_player.clear()

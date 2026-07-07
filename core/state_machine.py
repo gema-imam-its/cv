@@ -106,7 +106,7 @@ class SholatStateMachine:
             
         return []
 
-    def update(self, detected_pose):
+    def update(self, detected_pose, features=None):
         """
         Memperbarui status state machine berdasarkan pose yang dideteksi secara fisik.
         
@@ -165,7 +165,7 @@ class SholatStateMachine:
                 self.hold_counter += 1
                 
             if self.hold_counter >= self.max_hold_frames:
-                return self._commit_transition(self.target_state)
+                return self._commit_transition(self.target_state, features)
                 
         elif detected_pose == self.current_state:
             self.hold_counter = max(0, self.hold_counter - 1)
@@ -178,7 +178,7 @@ class SholatStateMachine:
         
         return None
 
-    def _commit_transition(self, new_state):
+    def _commit_transition(self, new_state, features=None):
         """Mengonfirmasi transisi dan mengembalikan data transisi."""
         import time
         now = time.time()
@@ -230,7 +230,12 @@ class SholatStateMachine:
             "exit_time": None,
             "duration_seconds": None,
             "tumaninah_met": None,
-            "bacaan_terpotong": None
+            "bacaan_terpotong": None,
+            "hip_angle": round(features.get("hip_angle", 0.0), 1) if (features and "hip_angle" in features) else "-",
+            "knee_angle": round(features.get("knee_angle", 0.0), 1) if (features and "knee_angle" in features) else "-",
+            "arm_angle": round(features.get("arm_angle", 0.0), 1) if (features and "arm_angle" in features) else "-",
+            "wrist_dist_x": round(features.get("wrist_dist_x", 0.0), 3) if (features and "wrist_dist_x" in features) else "-",
+            "head_offset_x": round(features.get("head_offset_x", 0.0), 3) if (features and "head_offset_x" in features) else "-"
         }
         self.completed_steps.append(log_entry)
         

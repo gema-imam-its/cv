@@ -15,7 +15,7 @@ Untuk deploy ke Orange Pi 4 Pro, ganti:
 # 1. PILIHAN PLATFORM
 # ─────────────────────────────────────────────────────────────
 # Ganti ke "opi4pro" saat deploy ke Orange Pi 4 Pro
-PLATFORM = "laptop"  # "laptop" | "opi4pro"
+PLATFORM = "opi4pro"  # "laptop" | "opi4pro"
 
 HARDWARE_PROFILES = {
     "laptop": {
@@ -32,7 +32,7 @@ HARDWARE_PROFILES = {
         "min_tracking_conf":  0.7,
     },
     "opi4pro": {
-        "model_complexity":  0,      # Lite — paling ringan untuk ARM CPU
+        "model_complexity":  1,      # Lite — paling ringan untuk ARM CPU
         "camera_index":      0,
         "camera_backend":    "v4l2", # wajib V4L2 di Linux embedded
         "camera_width":      640,
@@ -40,7 +40,7 @@ HARDWARE_PROFILES = {
         "camera_fps":        15,
         "buffer_size":       1,
         "skip_frame":        1,      # proses 1 dari 2 frame (frame skipping)
-        "camera_rotation":   None,   # Rotasi kamera: None, 90, 180, atau 270 (dalam derajat CW)
+        "camera_rotation":   90,   # Rotasi kamera: None, 90, 180, atau 270 (dalam derajat CW)
         "min_detection_conf": 0.6,   # sedikit diturunkan untuk toleransi
         "min_tracking_conf":  0.6,
     },
