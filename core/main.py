@@ -286,7 +286,6 @@ class GemaImamApp:
         # Data logger
         self.start_timestamp = None
         self.imam_mistakes_count = 0
-        self.prev_shoulder_center = None
         
         # Deteksi imam tidak terdeteksi
         self._no_imam_frames = 0
@@ -754,19 +753,6 @@ class GemaImamApp:
                     last_results = self.pose_detector.process(img_rgb)
                     
                     if last_results.pose_landmarks:
-                        # Cek kontinuitas tracking untuk mendeteksi gangguan multi-orang
-                        landmarks = last_results.pose_landmarks.landmark
-                        sh_l = [landmarks[LANDMARK.LEFT_SHOULDER].x, landmarks[LANDMARK.LEFT_SHOULDER].y]
-                        sh_r = [landmarks[LANDMARK.RIGHT_SHOULDER].x, landmarks[LANDMARK.RIGHT_SHOULDER].y]
-                        curr_center = [(sh_l[0] + sh_r[0]) / 2.0, (sh_l[1] + sh_r[1]) / 2.0]
-                        
-                        if self.prev_shoulder_center is not None:
-                            dist = np.sqrt((curr_center[0] - self.prev_shoulder_center[0])**2 + 
-                                           (curr_center[1] - self.prev_shoulder_center[1])**2)
-                            if dist > 0.25:  # Lompatan lebih dari 25% area frame dalam 1 frame
-                                print(f"[WARNING] Tracking jump terdeteksi (dist: {dist:.3f}). Kemungkinan terganggu orang lain di frame kamera.")
-                        
-                        self.prev_shoulder_center = curr_center
                         # Reset counter imam tidak terdeteksi
                         self._no_imam_frames = 0
                         self._no_imam_notified = False
