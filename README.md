@@ -79,30 +79,30 @@ Siswa tunawicara di **SLB Paedagogia Surabaya** menghadapi kendala saat memimpin
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         GEMA Imam — Hardware Layer                  │
-│                                                                      │
-│   Kamera USB (640×480)  →  Orange Pi 4 Pro (RK3399, 4GB)           │
-│                                ↓                                     │
+│                                                                     │
+│   Kamera USB (640×480)  →  Orange Pi 4 Pro (RK3399, 4GB)            │
+│                                ↓                                    │
 │   Speaker (3.5mm/USB)  ←  Audio Player (aplay/pygame)               │
 └─────────────────────────────────────────────────────────────────────┘
                                ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         Software Pipeline                            │
-│                                                                      │
+│                         Software Pipeline                           │
+│                                                                     │
 │   Frame Capture  →  MediaPipe Pose  →  Pose Classifier              │
 │                      (33 Landmark)     (13 Pose Kelas)              │
-│                                               ↓                      │
-│                               Sholat State Machine                   │
-│                          (Transisi + Tuma'ninah Eval)                │
-│                                               ↓                      │
-│                               Session Logger                         │
-│                             (CSV + JSON + KPI)                       │
+│                                               ↓                     │
+│                               Sholat State Machine                  │
+│                          (Transisi + Tuma'ninah Eval)               │
+│                                               ↓                     │
+│                               Session Logger                        │
+│                             (CSV + JSON + KPI)                      │
 └─────────────────────────────────────────────────────────────────────┘
                                ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         Notification Layer                           │
-│                                                                      │
+│                         Notification Layer                          │
+│                                                                     │
 │   Telegram Bot API  →  Pengurus Masjid (HP)                         │
-│   (Laporan, Peringatan, Remote Command)                              │
+│   (Laporan, Peringatan, Remote Command)                             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -115,7 +115,7 @@ Siswa tunawicara di **SLB Paedagogia Surabaya** menghadapi kendala saat memimpin
 | SBC (*Single Board Computer*) | Orange Pi 4 Pro — Rockchip RK3399, 4GB LPDDR4 RAM |
 | Kamera | USB Webcam, resolusi minimum 640×480 px |
 | Audio | Speaker pasif via 3.5mm jack atau USB Speaker |
-| Penyimpanan | eMMC 32GB onboard |
+| Penyimpanan | MicroSD 32GB |  
 | OS | Ubuntu 22.04 LTS (ARM64) |
 | Python | 3.10 |
 
@@ -341,13 +341,13 @@ Cakupan pengujian saat ini:
 
 | Nama | NRP | Peran |
 |---|---|---|
-| <!-- TODO --> | <!-- TODO --> | Ketua Tim / Computer Vision Lead |
-| <!-- TODO --> | <!-- TODO --> | Hardware Integration / IoT Engineer |
-| <!-- TODO --> | <!-- TODO --> | Anggota / Software Engineer |
+| <!-- TODO --> | <!-- TODO --> |  |
+| <!-- TODO --> | <!-- TODO --> |  |
+| <!-- TODO --> | <!-- TODO --> |  |
 
 **Dosen Pembimbing**: <!-- TODO: isi nama dosen pembimbing -->
 
-Dikembangkan sebagai bagian dari **PKM-KC (Pekan Kreativitas Mahasiswa — Karsa Cipta)**
+Dikembangkan sebagai bagian dari **PKM-PM (Pekan Kreativitas Mahasiswa — Pengabdian Masyarakat)**
 Institut Teknologi Sepuluh Nopember (ITS), Surabaya.
 
 ---
