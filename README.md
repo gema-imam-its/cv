@@ -250,25 +250,20 @@ Selain perintah manual, bot juga mengirimkan notifikasi otomatis:
 
 ## Autostart & Deployment
 
-Agar program berjalan otomatis setiap kali Orange Pi dinyalakan kembali (misalnya setelah mati listrik):
+Agar program berjalan otomatis dan langsung menampilkan jendela terminal berisi video feed kamera setiap kali Orange Pi dinyalakan kembali (misalnya setelah mati listrik):
 
 ```bash
-# 1. Salin berkas service
-sudo cp gema-imam.service /etc/systemd/system/
+# 1. Buat folder autostart XFCE jika belum ada
+mkdir -p ~/.config/autostart
 
-# 2. Aktifkan dan jalankan service
-sudo systemctl daemon-reload
-sudo systemctl enable gema-imam.service
-sudo systemctl start gema-imam.service
+# 2. Salin file autostart .desktop ke folder tersebut
+cp gema-imam-desktop.desktop ~/.config/autostart/
 
-# 3. Cek status
-sudo systemctl status gema-imam.service
+# 3. Berikan permission executable pada script runner
+chmod +x run_desktop.sh
 ```
 
-Untuk memantau log real-time program:
-```bash
-journalctl -u gema-imam.service -f
-```
+Setelah reboot, Orange Pi akan otomatis masuk ke Desktop, membuka `xfce4-terminal`, dan langsung menjalankan program GEMA Imam di dalamnya.
 
 ---
 
@@ -300,14 +295,14 @@ cv/
 │   └── telegram_notifier.py  # Telegram Bot API — notifikasi & command listener
 ├── audio/                    # File audio bacaan sholat (.WAV)
 ├── docs/                     # Dokumentasi & runbook teknis
-│   └── runbook.md            # Panduan setup, deploy, kalibrasi, & systemd
+│   └── runbook.md            # Panduan setup, deploy, kalibrasi, & autostart
 ├── logs/                     # Log sesi sholat (auto-generated, .csv + .json)
 ├── tests/
 │   └── test_state_machine.py # Unit tests logika state machine (Python unittest)
 ├── config.py                 # Konfigurasi platform, threshold, audio mapping
 ├── .env.example              # Template konfigurasi rahasia (token Telegram)
-├── gema-imam.service         # Template systemd service untuk autostart
-├── run_systemd.sh            # Runner script untuk systemd
+├── gema-imam-desktop.desktop # Konfigurasi Autostart Desktop XFCE
+├── run_desktop.sh            # Script runner untuk autostart desktop
 ├── install.sh                # Skrip instalasi otomatis
 ├── test_camera.py            # Pengujian kamera & benchmark FPS
 └── requirements.txt          # Dependensi Python

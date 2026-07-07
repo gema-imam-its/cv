@@ -115,13 +115,7 @@ Setiap kali sesi sholat diselesaikan (atau ditekan `q` di tengah jalan), sistem 
 
 ## 7. Mengaktifkan Autostart saat Boot
 
-Ada **dua metode autostart** yang tersedia tergantung pada kebutuhan deployment:
-
----
-
-### Metode A: XFCE Desktop Autostart ✅ (Direkomendasikan — Membuka Terminal)
-
-Metode ini membuka jendela **xfce4-terminal** secara otomatis saat Orange Pi selesai booting ke desktop XFCE, lalu menjalankan program di dalamnya. Output program dan pesan error terlihat langsung di layar.
+Metode yang digunakan adalah **XFCE Desktop Autostart**. Metode ini membuka jendela **xfce4-terminal** secara otomatis saat Orange Pi selesai booting ke desktop XFCE, lalu menjalankan program di dalamnya. Video feed dari kamera dan overlay HUD visualizer akan langsung terlihat di monitor yang tersambung.
 
 **Langkah instalasi (jalankan di terminal Orange Pi):**
 
@@ -138,54 +132,8 @@ chmod +x /home/orangepi/Downloads/cv/run_desktop.sh
 
 Setelah itu, **restart Orange Pi**. Saat desktop XFCE muncul, jendela terminal dengan program GEMA Imam akan terbuka otomatis.
 
-> **Cara menonaktifkan autostart ini:**
+> **Cara menonaktifkan autostart:**
 > ```bash
 > rm ~/.config/autostart/gema-imam-desktop.desktop
 > ```
-
----
-
-### Metode B: Systemd Service (Berjalan di Background — Tanpa Terminal)
-
-Metode ini menjalankan program **tanpa membuka jendela apapun** — cocok jika Orange Pi dioperasikan dalam mode headless (tanpa monitor/keyboard) atau sebagai server embedded. Program akan tetap berjalan di background meskipun tidak ada user yang login.
-
-> ⚠️ **Perhatian:** Karena systemd berjalan sebelum desktop XFCE dimuat, program otomatis masuk ke **mode headless** — tampilan kamera OpenCV tidak akan muncul. Semua output hanya tersedia via `journalctl`.
-
-**Langkah instalasi:**
-
-```bash
-# 1. Salin berkas unit service
-sudo cp /home/orangepi/Downloads/cv/gema-imam.service /etc/systemd/system/
-
-# 2. Muat ulang konfigurasi systemd
-sudo systemctl daemon-reload
-
-# 3. Aktifkan service agar otomatis menyala saat boot
-sudo systemctl enable gema-imam.service
-
-# 4. Jalankan service sekarang (tanpa restart)
-sudo systemctl start gema-imam.service
-
-# 5. Pantau status & log service secara real-time
-sudo systemctl status gema-imam.service
-journalctl -u gema-imam.service -f
-```
-
-> **Cara menonaktifkan service:**
-> ```bash
-> sudo systemctl stop gema-imam.service
-> sudo systemctl disable gema-imam.service
-> ```
-
----
-
-### Perbandingan Dua Metode
-
-| Fitur | Metode A — XFCE Autostart | Metode B — Systemd |
-|---|---|---|
-| Membuka terminal | ✅ Ya — jendela xfce4-terminal terbuka | ❌ Tidak — berjalan di background |
-| Tampilan kamera (GUI) | ✅ Muncul di layar | ❌ Mode headless saja |
-| Butuh login desktop | ✅ Ya | ❌ Tidak (langsung saat boot) |
-| Cocok untuk | Deployment dengan monitor di masjid | Server/headless tanpa monitor |
-| Restart otomatis jika crash | ❌ Tidak otomatis | ✅ Ya (`Restart=always`) |
 
