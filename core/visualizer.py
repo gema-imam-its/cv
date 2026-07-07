@@ -104,7 +104,7 @@ def draw_hud(frame, state, active_prayer, rakaat, fps, hold_counter, max_hold, c
     
     # 2. Tulis Info Sholat
     # Header Sholat
-    cv2.putText(frame, f"GEMA IMAM — {active_prayer.upper()}", (25, 40), 
+    cv2.putText(frame, f"GEMA IMAM - {active_prayer.upper()}", (25, 40), 
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 220, 255), 2, cv2.LINE_AA)
     
     # Rakaat
