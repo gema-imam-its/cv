@@ -22,3 +22,17 @@ echo "=================================================="
 
 # Jalankan program utama
 python core/main.py
+
+echo ""
+echo "=================================================="
+echo "  Program selesai atau dihentikan."
+echo "  Ketik perintah berikut untuk menjalankan kembali:"
+echo ""
+echo "    python core/main.py"
+echo ""
+echo "  Atau ketik 'exit' untuk menutup terminal ini."
+echo "=================================================="
+
+# Buka shell interaktif agar terminal tidak langsung tertutup
+# dan user bisa mengetik perintah kembali
+exec bash

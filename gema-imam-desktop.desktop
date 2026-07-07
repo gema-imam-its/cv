@@ -2,7 +2,7 @@
 Type=Application
 Name=GEMA Imam
 Comment=Sistem Pemantauan Gerakan Sholat — buka terminal dan jalankan program
-Exec=xfce4-terminal --title="GEMA Imam" --hold --command="/home/orangepi/Downloads/cv/run_desktop.sh"
+Exec=xfce4-terminal --title="GEMA Imam" --command="/home/orangepi/Downloads/cv/run_desktop.sh"
 Icon=utilities-terminal
 Hidden=false
 NoDisplay=false
