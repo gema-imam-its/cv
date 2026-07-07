@@ -273,8 +273,30 @@ class GemaImamApp:
                 from telegram_notifier import TelegramCommandListener
                 self.telegram_listener = TelegramCommandListener(app_ref=self)
                 self.telegram_listener.start()
+                self._send_startup_notification()
             except Exception as e:
                 print(f"[TELEGRAM CMD WARNING] Gagal memulai command listener: {e}")
+
+    def _send_startup_notification(self):
+        """Kirim pesan notifikasi startup ke Telegram secara async."""
+        def _notify():
+            import time
+            from datetime import datetime
+            time.sleep(2.0)  # Beri jeda agar listener siap dulu
+            from telegram_notifier import send_telegram_message
+            now_str = datetime.now().strftime("%d %b %Y, %H:%M:%S")
+            msg = (
+                "GEMA Imam - Sistem Aktif\n"
+                "================================\n"
+                f"Alat berhasil menyala dan siap beroperasi.\n\n"
+                f"Waktu   : {now_str}\n"
+                f"Sholat  : {self.active_prayer}\n"
+                f"Rakaat  : {self.state_machine.total_rakaats} rakaat\n\n"
+                "Ketik /help untuk melihat daftar perintah yang tersedia."
+            )
+            send_telegram_message(msg)
+            print("[TELEGRAM] Notifikasi startup berhasil dikirim.")
+        threading.Thread(target=_notify, daemon=True, name="TelegramStartupNotif").start()
 
     def run_telegram_setup_helper(self):
         """Membantu mendeteksi Chat ID pengguna secara non-blocking."""
