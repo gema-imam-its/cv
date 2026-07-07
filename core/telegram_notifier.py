@@ -379,7 +379,8 @@ class TelegramCommandListener:
         try:
             files = sorted(
                 [f for f in os.listdir(LOGS_DIR) if f.endswith(".json")],
-                reverse=True
+                key=lambda f: os.path.getmtime(os.path.join(LOGS_DIR, f)),
+                reverse=True  # index [0] = file paling baru
             )
             if not files:
                 self._reply("Belum ada file log tersedia.")

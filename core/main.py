@@ -393,8 +393,9 @@ class GemaImamApp:
         """
         try:
             json_files = sorted(
-                [f for f in os.listdir(LOGS_DIR) if f.endswith(".json")]
-            )  # sudah urut nama = urut waktu
+                [f for f in os.listdir(LOGS_DIR) if f.endswith(".json")],
+                key=lambda f: os.path.getmtime(os.path.join(LOGS_DIR, f))
+            )  # urut dari yang terlama ke terbaru berdasarkan waktu file
             if len(json_files) > max_sessions:
                 to_delete = json_files[:len(json_files) - max_sessions]
                 for fname in to_delete:
