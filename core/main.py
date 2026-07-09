@@ -312,7 +312,9 @@ class GemaImamApp:
         def _notify():
             import time
             from datetime import datetime
-            time.sleep(2.0)  # Beri jeda agar listener siap dulu
+            # Beri jeda 5 detik agar inisialisasi kamera & MediaPipe selesai 
+            # (mengurangi beban CPU puncak saat startup agar tidak timeout)
+            time.sleep(5.0)  
             from telegram_notifier import send_telegram_message
             now_str = datetime.now().strftime("%d %b %Y, %H:%M:%S")
             msg = (
@@ -324,8 +326,18 @@ class GemaImamApp:
                 f"Rakaat  : {self.state_machine.total_rakaats} rakaat\n\n"
                 "Ketik /help untuk melihat daftar perintah yang tersedia."
             )
-            send_telegram_message(msg)
-            print("[TELEGRAM] Notifikasi startup berhasil dikirim.")
+            
+            # Coba kirim pesan
+            success = send_telegram_message(msg)
+            if success:
+                print("[TELEGRAM] Notifikasi startup berhasil dikirim.")
+            else:
+                # Jika gagal/timeout karena jaringan saat booting, coba sekali lagi setelah 5 detik
+                print("[TELEGRAM WARNING] Gagal mengirim notifikasi startup. Mencoba kembali dalam 5 detik...")
+                time.sleep(5.0)
+                if send_telegram_message(msg):
+                    print("[TELEGRAM] Notifikasi startup berhasil dikirim pada percobaan kedua.")
+                
         threading.Thread(target=_notify, daemon=True, name="TelegramStartupNotif").start()
 
     def run_telegram_setup_helper(self):
