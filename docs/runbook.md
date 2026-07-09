@@ -137,3 +137,41 @@ Setelah itu, **restart Orange Pi**. Saat desktop XFCE muncul, jendela terminal d
 > rm ~/.config/autostart/gema-imam-desktop.desktop
 > ```
 
+---
+
+## 8. Remote Desktop / Monitoring Nirkabel via Tailscale
+
+Jika Orange Pi Anda sudah terhubung ke **Tailscale**, Anda bisa menjadikan laptop Anda sebagai **monitor nirkabel** untuk melihat secara langsung (mirroring) layar fisik Orange Pi yang sedang berjalan.
+
+Metode terbaik untuk ini adalah menggunakan **`x11vnc`** karena ia akan menampilkan layar fisik `:0` yang sama persis dengan yang tampil di monitor masjid.
+
+### Langkah 1: Instalasi `x11vnc` di Orange Pi
+Hubungkan ke Orange Pi via SSH, lalu jalankan:
+```bash
+sudo apt update
+sudo apt install x11vnc -y
+```
+
+### Langkah 2: Buat Password VNC
+Agar koneksi aman, buat password masuk dengan mengetik:
+```bash
+x11vnc -storepasswd
+```
+Masukkan password pilihan Anda (misal: `gemaimam`), lalu tekan `y` untuk menyimpan file di lokasi default (`~/.vnc/passwd`).
+
+### Langkah 3: Jalankan VNC Server di Orange Pi
+Jalankan perintah berikut agar VNC menargetkan layar desktop utama (`:0`):
+```bash
+x11vnc -auth guess -forever -loop -noxdamage -repeat -rfbauth ~/.vnc/passwd -rfbport 5900 -shared
+```
+
+> 💡 **Tips Autostart VNC**: Jika Anda ingin VNC Server ini juga menyala otomatis setiap kali booting, Anda cukup mendaftarkannya ke XFCE Autostart dengan cara yang sama seperti program GEMA Imam.
+
+### Langkah 4: Hubungkan dari Laptop Anda
+1. Download dan install **[VNC Viewer](https://www.realvnc.com/en/connect/download/viewer/)** di laptop Anda.
+2. Buka VNC Viewer, masukkan alamat IP Tailscale Orange Pi diikuti port `:5900`.
+   * Contoh: `100.115.22.45:5900`
+3. Masukkan password VNC yang telah Anda buat di Langkah 2.
+4. **Selesai!** Layar desktop Orange Pi akan muncul secara nirkabel di laptop Anda secara real-time.
+
+
