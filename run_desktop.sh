@@ -15,6 +15,13 @@ source "$PROJECT_DIR/venv/bin/activate"
 # Pindah ke direktori project
 cd "$PROJECT_DIR"
 
+# Jalankan x11vnc server secara otomatis di background jika belum aktif
+if ! pgrep -x "x11vnc" >/dev/null; then
+    echo "  [VNC] Menjalankan x11vnc server otomatis..."
+    x11vnc -auth guess -forever -loop -noxdamage -repeat -rfbauth ~/.vnc/passwd -rfbport 5900 -shared >/dev/null 2>&1 &
+    sleep 1
+fi
+
 # Baca MAC Address Bluetooth Speaker dari file .env (jika ada)
 BT_MAC=""
 if [ -f "$PROJECT_DIR/.env" ]; then
@@ -63,19 +70,28 @@ fi
 
 echo ""
 
-# Jalankan program utama
-python core/main.py
-
-echo ""
-echo "=================================================="
-echo "  Program selesai atau dihentikan."
-echo "  Ketik perintah berikut untuk menjalankan kembali:"
-echo ""
-echo "    python core/main.py"
-echo ""
-echo "  Atau ketik 'exit' untuk menutup terminal ini."
-echo "=================================================="
+# Jalankan program utama dengan mekanisme watchdog otomatis
+while true; do
+    echo "=================================================="
+    echo "  [WATCHDOG] Memulai program utama GEMA Imam..."
+    echo "=================================================="
+    
+    python core/main.py
+    EXIT_CODE=$?
+    
+    echo ""
+    echo "  [WATCHDOG] Program terhenti dengan exit code $EXIT_CODE."
+    
+    # Jika dihentikan dengan normal (exit code 0 atau lewat shortcut keluar), stop loop
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "  [WATCHDOG] Program keluar secara normal. Menghentikan watchdog."
+        break
+    else
+        echo "  [WATCHDOG] ⚠️ Program crash / terhenti paksa."
+        echo "  [WATCHDOG] Mengulang kembali dalam 5 detik... (Tekan Ctrl+C di terminal ini untuk membatalkan)"
+        sleep 5
+    fi
+done
 
 # Buka shell interaktif agar terminal tidak langsung tertutup
-# dan user bisa mengetik perintah kembali
 exec bash

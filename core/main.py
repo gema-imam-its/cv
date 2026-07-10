@@ -376,7 +376,7 @@ class GemaImamApp:
         self.audio_player.clear()  # Bersihkan audio sebelumnya
         if self.active_prayer == "Subuh":
             self.audio_player.play(AUDIO_EXTRA["niat_subuh"])
-        elif self.active_prayer == "Dzuhur":
+        elif self.active_prayer == "Dhuhur":
             self.audio_player.play(AUDIO_EXTRA["niat_dzuhur"])
         elif self.active_prayer == "Ashar":
             self.audio_player.play(AUDIO_EXTRA["niat_ashar"])
@@ -780,11 +780,8 @@ class GemaImamApp:
                         self._no_imam_frames = 0
                         self._no_imam_notified = False
 
-                        # 1. Klasifikasi pose saat ini
+                        # 1. Klasifikasi pose & ambil fitur sendi/sudut
                         last_classified_pose = classify_pose(last_results.pose_landmarks)
-                        
-                        # Ambil fitur sendi/sudut untuk keperluan pencatatan log detail
-                        from pose_classifier import get_pose_features
                         last_features = get_pose_features(last_results.pose_landmarks)
                         
                         # 2. Update state machine sholat dengan menyertakan fitur sendi
@@ -824,9 +821,6 @@ class GemaImamApp:
                                         audio_state = AUDIO_STATE_MAP.get(to_st)
                                         if audio_state:
                                             self.audio_player.play(audio_state)
-                        
-                        # 3. Hitung fitur untuk debug sudut
-                        last_features = get_pose_features(last_results.pose_landmarks)
                         
                         # Logika Kalibrasi Tinggi Badan
                         if self.calibrating:
@@ -957,15 +951,10 @@ class GemaImamApp:
                             self.play_niat_audio()
                             self.start_session_logging()
                 else:
-                    # Headless Mode console logs
+                    # Headless Mode — cetak log ke terminal setiap 30 frame (~2 detik pada 15fps)
                     if frame_count % 30 == 0:
                         temp_str = f" | CPU Temp: {cpu_temp}°C" if cpu_temp is not None else ""
                         print(f"[Headless] Frame: {frame_count} | FPS: {fps:.1f} | Pose: {last_classified_pose} | State: {self.state_machine.current_state} (Rakaat {self.state_machine.rakaat_count}){temp_str}")
-                    
-                    # Otomatis berhenti setelah 500 frame di headless mode (untuk benchmark)
-                    if frame_count >= 500:
-                        print("[Headless] Benchmark 500 frame selesai.")
-                        break
                         
         except KeyboardInterrupt:
             print("\n[INFO] Program dihentikan via KeyboardInterrupt.")

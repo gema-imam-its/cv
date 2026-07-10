@@ -32,7 +32,7 @@ HARDWARE_PROFILES = {
         "min_tracking_conf":  0.7,
     },
     "opi4pro": {
-        "model_complexity":  1,      # 0 = Lite (paling ringan untuk ARM CPU)
+        "model_complexity":  0,      # 0 = Lite (paling ringan untuk ARM CPU)
         "camera_index":      0,
         "camera_backend":    "v4l2", # wajib V4L2 di Linux embedded
         "camera_width":      640,
