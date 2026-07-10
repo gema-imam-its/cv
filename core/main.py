@@ -900,6 +900,12 @@ class GemaImamApp:
                         if self.debug_mode and last_features:
                             visualizer.draw_debug_angles(frame, last_results.pose_landmarks, last_features)
                             
+                        # Draw alignment guide (Asisten Posisi Imam)
+                        visualizer.draw_alignment_guide(frame, last_results.pose_landmarks)
+                    else:
+                        # Jika tidak terdeteksi pose, gambar garis tengah bantu saja
+                        visualizer.draw_alignment_guide(frame, None)
+                            
                     # Draw HUD
                     visualizer.draw_hud(
                         frame,

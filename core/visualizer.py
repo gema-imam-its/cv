@@ -184,3 +184,55 @@ def draw_debug_angles(frame, lm, angles):
                 # Tulis label sudut di sebelah sendi (geser sedikit ke kanan)
                 cv2.putText(frame, f"{int(angle)}*", (pt[0] + 15, pt[1] + 5), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (50, 255, 255), 2, cv2.LINE_AA)
+
+def draw_alignment_guide(frame, lm):
+    """
+    Asisten Posisi Imam:
+    1. Menggambar garis bantu tengah vertikal.
+    2. Menghasilkan teks peringatan jika imam berdiri tidak simetris atau terlalu dekat.
+    """
+    h, w, _ = frame.shape
+    center_x = w // 2
+    
+    # A. Gambar garis bantu tengah vertikal (hijau transparan tipis)
+    cv2.line(frame, (center_x, 0), (center_x, h), (0, 200, 100), 1, cv2.LINE_AA)
+    
+    if not lm:
+        return
+        
+    # B. Cek Visibilitas Kaki (Ankles) untuk mendeteksi potong setengah badan
+    ankle_l_vis = lm.landmark[LANDMARK.LEFT_ANKLE].visibility
+    ankle_r_vis = lm.landmark[LANDMARK.RIGHT_ANKLE].visibility
+    
+    warning_text = ""
+    
+    if ankle_l_vis < 0.5 or ankle_r_vis < 0.5:
+        warning_text = "MUNDUR! Kaki tidak terlihat"
+    else:
+        # C. Cek kelurusan bahu terhadap garis tengah
+        sh_l = get_pixel_coords(lm, LANDMARK.LEFT_SHOULDER, w, h)
+        sh_r = get_pixel_coords(lm, LANDMARK.RIGHT_SHOULDER, w, h)
+        sh_x_center = (sh_l[0] + sh_r[0]) // 2
+        
+        # Toleransi simpangan tengah = 10% lebar layar
+        max_offset = int(w * 0.1)
+        
+        if sh_x_center < (center_x - max_offset):
+            warning_text = "GESER KE KANAN"
+        elif sh_x_center > (center_x + max_offset):
+            warning_text = "GESER KE KIRI"
+            
+    # D. Render box warning di bawah jika ada error posisi
+    if warning_text:
+        # Buat background box merah semi-transparan untuk text warning
+        overlay = frame.copy()
+        box_y = h - 50
+        cv2.rectangle(overlay, (20, box_y), (w - 20, h - 10), (0, 0, 180), -1)
+        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+        
+        # Tulis teks warning posisi di tengah box
+        text_size = cv2.getTextSize(warning_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+        text_x = (w - text_size[0]) // 2
+        cv2.putText(frame, warning_text, (text_x, h - 23),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+
