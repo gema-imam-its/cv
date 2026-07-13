@@ -188,14 +188,16 @@ def draw_debug_angles(frame, lm, angles):
 def draw_alignment_guide(frame, lm):
     """
     Asisten Posisi Imam:
-    1. Menggambar garis bantu tengah vertikal.
+    1. Menggambar garis bantu silang tengah (crosshair) merah.
     2. Menghasilkan teks peringatan jika imam berdiri tidak simetris atau terlalu dekat.
     """
     h, w, _ = frame.shape
     center_x = w // 2
-    
-    # A. Gambar garis bantu tengah vertikal (hijau transparan tipis)
-    cv2.line(frame, (center_x, 0), (center_x, h), (0, 200, 100), 1, cv2.LINE_AA)
+    center_y = h // 2
+
+    # A. Gambar garis bantu tengah: vertikal + horizontal (crosshair merah)
+    cv2.line(frame, (center_x, 0), (center_x, h), (0, 0, 200), 1, cv2.LINE_AA)
+    cv2.line(frame, (0, center_y), (w, center_y), (0, 0, 200), 1, cv2.LINE_AA)
     
     if not lm:
         return
