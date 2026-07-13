@@ -247,11 +247,11 @@ class SholatStateMachine:
             "tumaninah_met": None,
             "bacaan_terpotong": None,
             "gerakan_menyimpang": [],
-            "hip_angle": round(features.get("hip_angle", 0.0), 1) if (features and "hip_angle" in features) else "-",
-            "knee_angle": round(features.get("knee_angle", 0.0), 1) if (features and "knee_angle" in features) else "-",
-            "arm_angle": round(features.get("arm_angle", 0.0), 1) if (features and "arm_angle" in features) else "-",
-            "wrist_dist_x": round(features.get("wrist_dist_x", 0.0), 3) if (features and "wrist_dist_x" in features) else "-",
-            "head_offset_x": round(features.get("head_offset_x", 0.0), 3) if (features and "head_offset_x" in features) else "-"
+            "hip_angle": round(features.get("hip_angle", 0.0), 1) if (features and "hip_angle" in features) else None,
+            "knee_angle": round(features.get("knee_angle", 0.0), 1) if (features and "knee_angle" in features) else None,
+            "arm_angle": round(features.get("arm_angle", 0.0), 1) if (features and "arm_angle" in features) else None,
+            "wrist_dist_x": round(features.get("wrist_dist_x", 0.0), 3) if (features and "wrist_dist_x" in features) else None,
+            "head_offset_x": round(features.get("head_offset_x", 0.0), 3) if (features and "head_offset_x" in features) else None
         }
         self.completed_steps.append(log_entry)
         
