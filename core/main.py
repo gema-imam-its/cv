@@ -446,8 +446,9 @@ class GemaImamApp:
 
         threading.Thread(target=_send, daemon=True, name="WebAPIGerakanCatat").start()
 
-    def lapor_sesi_selesai(self, session_id):
-        """Melaporkan ke Web LMS bahwa sesi sholat telah selesai."""
+    def lapor_sesi_selesai(self, session_id, payload=None):
+        """Melaporkan ke Web LMS bahwa sesi sholat telah selesai,
+        disertai seluruh payload JSON ringkasan sesi jika tersedia."""
         if not WEB_LMS_URL or not session_id:
             return
 
@@ -456,12 +457,15 @@ class GemaImamApp:
             "x-api-key": WEB_LMS_API_KEY,
             "Content-Type": "application/json"
         }
+        # Gunakan payload ringkasan lengkap jika diberikan, minimal kirim sesi_id
+        body = payload if payload else {}
+        body["sesi_id"] = session_id
         try:
-            res = requests.post(url, json={"session_id": session_id}, headers=headers, timeout=5)
+            res = requests.post(url, json=body, headers=headers, timeout=10)
             if res.status_code == 200:
-                print(f"[WEB API] Sesi sholat '{session_id}' berhasil ditutup di server.")
+                print(f"[WEB API] Laporan sesi '{session_id}' berhasil dikirim ke Web LMS.")
             else:
-                print(f"[WEB API WARNING] Gagal menutup sesi sholat. Status: {res.status_code}")
+                print(f"[WEB API WARNING] Gagal mengirim laporan sesi. Status: {res.status_code}")
         except Exception as e:
             print(f"[WEB API WARNING] Gagal terhubung ke Web LMS saat menutup sesi: {e}")
 
@@ -665,6 +669,10 @@ class GemaImamApp:
             print(f"[LOGGER] Ringkasan JSON disimpan di: {json_filename}")
         except Exception as e:
             print(f"[ERROR] Gagal menyimpan log JSON: {e}")
+            
+        # Kirim laporan lengkap ke Web LMS jika sesi aktif
+        if self.current_session_id:
+            self.lapor_sesi_selesai(self.current_session_id, payload=dict(summary))
             
         # Tampilkan laporan evaluasi KPI di terminal
         print("\n" + "=" * 55)
@@ -963,7 +971,6 @@ class GemaImamApp:
                 if self.state_machine.current_state == POSE.SELESAI:
                     print("[INFO] Sesi sholat selesai dengan sempurna. Mengirim laporan ke Web LMS...")
                     self.save_session_logs(force_cancel=False)
-                    self.lapor_sesi_selesai(self.current_session_id)
                     break
                 elif self.state_machine.current_state == POSE.SALAM_KE_KIRI:
                     if self.audio_player.queue.empty() and not self.audio_player.current_playing_file:
@@ -1010,7 +1017,6 @@ class GemaImamApp:
                         print("[INFO] Menutup sesi sholat secara paksa via keyboard shortcut.")
                         self.audio_player.clear()
                         self.save_session_logs(force_cancel=True)
-                        self.lapor_sesi_selesai(self.current_session_id)
                         break
                     elif key == KEY_RESET:
                         self.reset_from_button()
@@ -1041,14 +1047,12 @@ class GemaImamApp:
         except KeyboardInterrupt:
             print("\n[INFO] Sesi sholat dihentikan via KeyboardInterrupt.")
             self.save_session_logs(force_cancel=True)
-            self.lapor_sesi_selesai(self.current_session_id)
         except Exception as crash_err:
             import traceback
             tb_str = traceback.format_exc()
             print(f"\n[CRITICAL] Sesi sholat crash: {crash_err}")
             print(tb_str)
             self.save_session_logs(force_cancel=True)
-            self.lapor_sesi_selesai(self.current_session_id)
         finally:
             cap.release()
             print(f"\nSesi selesai. Rata-rata FPS: {fps:.1f}")
