@@ -576,6 +576,32 @@ class GemaImamApp:
         status_str = "Dibatalkan" if force_cancel else "Selesai"
         duration = (datetime.now() - self.start_timestamp).total_seconds()
         
+        # APPEND CURRENT ACTIVE STATE SO IT IS NOT LOST
+        if self.state_machine.current_state != POSE.UNKNOWN:
+            # Check if this state is already the last one in completed_steps
+            # It shouldn't be, because we only append upon transition
+            duration_last = 0
+            if getattr(self.state_machine, 'state_start_time', None):
+                duration_last = time.time() - self.state_machine.state_start_time
+                
+            self.state_machine.completed_steps.append({
+                "rakaat": self.state_machine.rakaat_count,
+                "state": self.state_machine.current_state,
+                "entry_time": getattr(self.state_machine, 'state_start_time_str', "-"),
+                "exit_time": time.strftime("%H:%M:%S") if not force_cancel else "Batal",
+                "duration_seconds": round(duration_last, 2),
+                "tumaninah_met": False, 
+                "bacaan_terpotong": None,
+                "gerakan_menyimpang": getattr(self.state_machine, 'current_state_deviations', []),
+                "hip_angle": None,
+                "knee_angle": None,
+                "arm_angle": None,
+                "wrist_dist_x": None,
+                "head_offset_x": None
+            })
+            # Clear it so we don't append it again if save_session_logs is called twice somehow
+            self.state_machine.current_state = POSE.UNKNOWN
+
         # Hitung statistik tuma'ninah
         total_tumaninah_check = 0
         total_tumaninah_success = 0
