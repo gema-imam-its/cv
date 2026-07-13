@@ -362,3 +362,10 @@ if os.path.exists(_env_path):
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "isi_token_bot_anda_di_sini")
 TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+# ─────────────────────────────────────────────────────────────
+# 12. INTEGRASI WEB LMS
+# ─────────────────────────────────────────────────────────────
+WEB_LMS_URL        = os.environ.get("WEB_LMS_URL", "")
+WEB_LMS_API_KEY    = os.environ.get("WEB_LMS_API_KEY", "")
+

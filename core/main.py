@@ -23,6 +23,7 @@ import numpy as np
 import queue
 import subprocess
 import threading
+import requests
 
 from config import (
     ACTIVE_PROFILE,
@@ -48,7 +49,9 @@ from config import (
     AUTO_DETECT_PRAYER,
     USE_TELEGRAM,
     TELEGRAM_BOT_TOKEN,
-    TELEGRAM_CHAT_ID
+    TELEGRAM_CHAT_ID,
+    WEB_LMS_URL,
+    WEB_LMS_API_KEY
 )
 from pose_utils import get_coords
 from pose_classifier import classify_pose, get_pose_features
@@ -287,6 +290,10 @@ class GemaImamApp:
         self.start_timestamp = None
         self.imam_mistakes_count = 0
         
+        # Variabel Sesi Web LMS
+        self.current_session_id = None
+        self.current_student_name = None
+        
         # Deteksi imam tidak terdeteksi
         self._no_imam_frames = 0
         self._no_imam_notified = False
@@ -393,6 +400,106 @@ class GemaImamApp:
         self.state_machine.reset()
         self.audio_player.clear()
         self.imam_mistakes_count = 0
+
+    def check_web_status(self):
+        """Mengecek ke Web LMS apakah ada sesi praktik aktif."""
+        if not WEB_LMS_URL:
+            return {"status": "idle"}
+            
+        url = f"{WEB_LMS_URL.rstrip('/')}/api/iot/status"
+        headers = {
+            "x-api-key": WEB_LMS_API_KEY,
+            "Content-Type": "application/json"
+        }
+        try:
+            response = requests.get(url, headers=headers, timeout=1.5)
+            if response.status_code == 200:
+                return response.json()
+        except Exception:
+            pass
+        return {"status": "idle"}
+
+    def kirim_nilai_ke_web(self, session_id, gerakan, nilai):
+        """Mengirim data akurasi gerakan sholat ke Web LMS secara asinkron."""
+        if not WEB_LMS_URL or not session_id:
+            return
+
+        def _send():
+            url = f"{WEB_LMS_URL.rstrip('/')}/api/iot/gerakan/catat"
+            headers = {
+                "x-api-key": WEB_LMS_API_KEY,
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "session_id": session_id,
+                "movement_type": gerakan,
+                "accuracy_score": int(nilai)
+            }
+            try:
+                res = requests.post(url, json=payload, headers=headers, timeout=5)
+                if res.status_code == 200:
+                    print(f"[WEB API] Nilai gerakan '{gerakan}' ({nilai}%) sukses terkirim ke Web LMS.")
+                else:
+                    print(f"[WEB API WARNING] Gagal mengirim gerakan. Status: {res.status_code}")
+            except Exception as e:
+                print(f"[WEB API WARNING] Gagal terhubung ke Web LMS untuk mencatat gerakan: {e}")
+
+        threading.Thread(target=_send, daemon=True, name="WebAPIGerakanCatat").start()
+
+    def lapor_sesi_selesai(self, session_id):
+        """Melaporkan ke Web LMS bahwa sesi sholat telah selesai."""
+        if not WEB_LMS_URL or not session_id:
+            return
+
+        url = f"{WEB_LMS_URL.rstrip('/')}/api/iot/sesi/selesai"
+        headers = {
+            "x-api-key": WEB_LMS_API_KEY,
+            "Content-Type": "application/json"
+        }
+        try:
+            res = requests.post(url, json={"session_id": session_id}, headers=headers, timeout=5)
+            if res.status_code == 200:
+                print(f"[WEB API] Sesi sholat '{session_id}' berhasil ditutup di server.")
+            else:
+                print(f"[WEB API WARNING] Gagal menutup sesi sholat. Status: {res.status_code}")
+        except Exception as e:
+            print(f"[WEB API WARNING] Gagal terhubung ke Web LMS saat menutup sesi: {e}")
+
+    def show_standby_frame(self):
+        """Membuat dan menampilkan frame standby yang estetik di layar."""
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        
+        # Gambar gradasi / box latar belakang modern
+        cv2.rectangle(frame, (30, 30), (610, 450), (20, 20, 20), -1)
+        cv2.rectangle(frame, (30, 30), (610, 450), (60, 50, 40), 1, cv2.LINE_AA)
+        
+        # Header / Brand
+        cv2.putText(frame, "GEMA IMAM - SISTEM AKTIF", (80, 100),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (200, 220, 255), 2, cv2.LINE_AA)
+        cv2.line(frame, (80, 120), (560, 120), (80, 80, 80), 1)
+        
+        # Status / Menunggu
+        cv2.putText(frame, "STATUS: STANDBY MODE", (80, 180),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 200, 100), 2, cv2.LINE_AA)
+        cv2.putText(frame, "Menunggu instruksi praktikum dari Web LMS...", (80, 220),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (180, 180, 180), 1, cv2.LINE_AA)
+        
+        # Petunjuk penggunaan untuk Guru / Operator
+        cv2.putText(frame, "Instruksi Operator:", (80, 290),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (130, 160, 200), 1, cv2.LINE_AA)
+        cv2.putText(frame, "1. Buka Web LMS Next.js di laptop/HP.", (80, 320),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1, cv2.LINE_AA)
+        cv2.putText(frame, "2. Pilih Siswa & Klik 'Mulai Praktik'.", (80, 345),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1, cv2.LINE_AA)
+        cv2.putText(frame, "3. Kamera alat ini akan otomatis menyala.", (80, 370),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1, cv2.LINE_AA)
+        
+        # Info exit
+        cv2.putText(frame, "Tekan 'q' di jendela ini untuk keluar.", (80, 420),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 100, 100), 1, cv2.LINE_AA)
+        
+        cv2.imshow("GEMA Imam", frame)
+
 
     def load_calibration(self):
         """Memuat data kalibrasi dari file jika tersedia."""
@@ -606,44 +713,40 @@ class GemaImamApp:
                 print(f"[TELEGRAM WARNING] Gagal mengirim laporan/dokumen telegram: {e}")
 
         # 4. Rotasi log — hapus sesi terlama jika sudah > 60 sesi
-        self.rotate_logs(max_sessions=60)
-
-    def run(self):
+    def run_active_tracking_session(self):
         camera_index = ACTIVE_PROFILE["camera_index"]
         backend_str = ACTIVE_PROFILE.get("camera_backend", None)
         skip_frame_rate = ACTIVE_PROFILE.get("skip_frame", 0)
         
         is_stream = isinstance(camera_index, str) and (camera_index.startswith("http://") or camera_index.startswith("https://"))
         
-        print("\n[STEP 4/4] Membuka kamera...")
+        print(f"\n[AI START] Mengaktifkan Kamera! Siswa yang akan sholat: {self.current_student_name}")
+        print(f"ID Sesi: {self.current_session_id}\n")
+        
         if is_stream:
             cap = cv2.VideoCapture(camera_index)
-            print(f"      Menggunakan stream URL: {camera_index}")
         else:
             if backend_str == "v4l2":
                 cap = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
-                print("      Menggunakan backend: V4L2")
             else:
                 cap = cv2.VideoCapture(camera_index)
-                print("      Menggunakan backend: Auto")
                 
         if not cap.isOpened():
             err_msg = f"❌ GAGAL: Tidak bisa membuka kamera/stream: {camera_index}"
             print(err_msg)
             if is_stream:
                 print("Pastikan server stream di Windows sudah berjalan.")
-            # Kirim notifikasi Telegram sebelum exit
             if USE_TELEGRAM and TELEGRAM_CHAT_ID:
                 try:
                     from telegram_notifier import send_telegram_message
                     send_telegram_message(
                         "\u274c *GEMA Imam - Kamera Tidak Terdeteksi*\n"
-                        f"Sistem gagal membuka kamera (index: `{camera_index}`).\n"
-                        "Pastikan kamera USB terhubung dengan benar dan tidak digunakan oleh aplikasi lain."
+                        f"Sistem gagal membuka kamera (index: `{camera_index}`)."
                     )
                 except Exception:
                     pass
-            sys.exit(1)
+            self.lapor_sesi_selesai(self.current_session_id)
+            return
             
         # Set resolusi jika kamera lokal
         if not is_stream:
@@ -664,9 +767,6 @@ class GemaImamApp:
         
         # Mulai sesi logging
         self.start_session_logging()
-        
-        # Start button listener (GPIO atau keyboard)
-        self.button_listener.start()
             
         frame_count = 0
         fps = 0.0
@@ -678,19 +778,13 @@ class GemaImamApp:
         last_features = {}
         cpu_temp = None
         
+        # Reset state machine untuk sesi sholat baru
+        self.state_machine.reset()
+        self.audio_player.clear()
+        self.imam_mistakes_count = 0
+        
         print("\n" + "=" * 55)
-        if HAS_DISPLAY:
-            print(" GEMA IMAM RUNNING (Mode GUI)")
-            print(" Shortcuts:")
-            print("   1-5 : Ganti Sholat (Subuh, Dhuhur, Ashar, Maghrib, Isya)")
-            print("   r   : Reset State Machine")
-            print("   d   : Toggle Debug Overlay (Tampilkan Sudut)")
-            print("   c   : Mulai Kalibrasi Tinggi Badan (Berdiri Tegak)")
-            print("   p   : Pause / Resume")
-            print("   q   : Keluar & Simpan Log Sesi")
-        else:
-            print(" GEMA IMAM RUNNING (Mode Headless/SSH)")
-            print(" Menjalankan benchmark... Tekan Ctrl+C untuk keluar.")
+        print(" GEMA IMAM RUNNING (Praktikum Aktif)")
         print("=" * 55 + "\n")
         
         try:
@@ -698,13 +792,6 @@ class GemaImamApp:
                 ret, frame = cap.read()
                 if not ret:
                     print("[WARNING] Kamera terputus! Mencoba menghubungkan kembali dalam 5 detik...")
-                    if USE_TELEGRAM and TELEGRAM_CHAT_ID:
-                        try:
-                            from telegram_notifier import send_telegram_message
-                            send_telegram_message("⚠️ *GEMA Imam - Kamera Terputus*\nSistem mendeteksi koneksi kamera terputus. Mencoba menghubungkan kembali...")
-                        except Exception:
-                            pass
-                    
                     # Loop reconnect
                     reconnect_success = False
                     while not reconnect_success:
@@ -721,7 +808,6 @@ class GemaImamApp:
                                 cap = cv2.VideoCapture(camera_index)
                                 
                         if cap.isOpened():
-                            # Set resolusi kembali
                             if not is_stream:
                                 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
                                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, ACTIVE_PROFILE["camera_width"])
@@ -731,18 +817,13 @@ class GemaImamApp:
                             ret_test, frame_test = cap.read()
                             if ret_test:
                                 print("✅ Kamera berhasil terhubung kembali!")
-                                if USE_TELEGRAM and TELEGRAM_CHAT_ID:
-                                    try:
-                                        send_telegram_message("✅ *GEMA Imam - Kamera Tersambung*\nKamera berhasil terhubung kembali. Sistem melanjutkan pemantauan.")
-                                    except Exception:
-                                        pass
                                 reconnect_success = True
                                 break
                     continue
                     
                 frame_count += 1
                 
-                # Baca suhu CPU setiap 150 frame (mengurangi I/O overhead)
+                # Baca suhu CPU setiap 150 frame
                 if frame_count % 150 == 0:
                     cpu_temp = get_cpu_temp()
                 
@@ -768,7 +849,7 @@ class GemaImamApp:
                 # Mirror frame
                 frame = cv2.flip(frame, 1)
                 
-                # Frame skipping logic (sangat penting untuk Orange Pi)
+                # Frame skipping logic
                 should_process = (frame_count % (skip_frame_rate + 1)) == 0
                 
                 if should_process:
@@ -776,22 +857,17 @@ class GemaImamApp:
                     last_results = self.pose_detector.process(img_rgb)
                     
                     if last_results.pose_landmarks:
-                        # Reset counter imam tidak terdeteksi
                         self._no_imam_frames = 0
                         self._no_imam_notified = False
-
-                        # 1. Klasifikasi pose & ambil fitur sendi/sudut
+                        
                         last_classified_pose = classify_pose(last_results.pose_landmarks)
                         last_features = get_pose_features(last_results.pose_landmarks)
                         
-                        # 2. Update state machine sholat dengan menyertakan fitur sendi
                         if not self.calibrating:
                             transition_info = self.state_machine.update(last_classified_pose, last_features)
                             if transition_info:
-                                # Opsi 1: Hentikan audio yang sedang berjalan dan kosongkan antrean secara instan
                                 interrupted_files = self.audio_player.clear()
                                 
-                                # Evaluasi kesalahan Imam (bacaan terpotong sebelum selesai)
                                 for audio_file in interrupted_files:
                                     if audio_file in READING_AUDIOS:
                                         self.imam_mistakes_count += 1
@@ -802,16 +878,14 @@ class GemaImamApp:
                                 from_st = transition_info["from"]
                                 to_st = transition_info["to"]
                                 
-                                # Logika Niat: Hanya diputar pada gerakan BERDIRI_TEGAK pertama dari UNKNOWN
+                                # Logika Niat
                                 if to_st == POSE.BERDIRI_TEGAK and from_st == POSE.UNKNOWN:
                                     self.play_niat_audio()
                                 else:
-                                    # Putar audio transisi (Takbir Intiqal / Tasmi')
                                     audio_trans = AUDIO_TRANSITION_MAP.get((from_st, to_st))
                                     if audio_trans:
                                         self.audio_player.play(audio_trans)
                                         
-                                    # Putar audio bacaan gerakan saat ini
                                     if to_st == POSE.BERSEDEKAP:
                                         if transition_info["is_first_sedekap"]:
                                             self.audio_player.play("iftitah.WAV")
@@ -821,12 +895,41 @@ class GemaImamApp:
                                         audio_state = AUDIO_STATE_MAP.get(to_st)
                                         if audio_state:
                                             self.audio_player.play(audio_state)
-                        
+                                
+                                # --- INTEGRASI SINKRONISASI GERAKAN REAL-TIME DENGAN WEB LMS ---
+                                if self.current_session_id and len(self.state_machine.completed_steps) >= 2:
+                                    prev_step = self.state_machine.completed_steps[-2]
+                                    
+                                    # Hitung akurasi gerakan berdasarkan tuma'ninah dan gerakan menyimpang
+                                    score = 100
+                                    if prev_step.get("tumaninah_met") is False:
+                                        score -= 40  # Penalti jika tidak tuma'ninah
+                                    dev_count = len(prev_step.get("gerakan_menyimpang", []))
+                                    score -= min(60, dev_count * 20)  # Penalti gerakan menyimpang
+                                    score = max(0, score)
+                                    
+                                    # Petakan enum POSE ke string yang didukung Web
+                                    pose_mapping = {
+                                        POSE.BERDIRI_TEGAK: "berdiri",
+                                        POSE.BERSEDEKAP: "sedekap",
+                                        POSE.RUKUK: "rukuk",
+                                        POSE.ITIDAL: "itidal",
+                                        POSE.SUJUD_PERTAMA: "sujud",
+                                        POSE.SUJUD_KEDUA: "sujud",
+                                        POSE.DUDUK_DI_ANTARA_DUA_SUJUD: "duduk",
+                                        POSE.DUDUK_TASYAHUD_AWAL: "duduk",
+                                        POSE.DUDUK_TASYAHUD_AKHIR: "duduk",
+                                        POSE.SALAM_KE_KANAN: "salam",
+                                        POSE.SALAM_KE_KIRI: "salam"
+                                    }
+                                    m_type = pose_mapping.get(prev_step["state"])
+                                    if m_type:
+                                        self.kirim_nilai_ke_web(self.current_session_id, m_type, score)
+                                        
                         # Logika Kalibrasi Tinggi Badan
                         if self.calibrating:
                             elapsed_cal = time.time() - self.calibration_start_time
                             if elapsed_cal < 5.0:
-                                # Kumpulkan sampel koordinat bahu, pinggul, lutut
                                 sh_l = get_coords(last_results.pose_landmarks, LANDMARK.LEFT_SHOULDER)
                                 sh_r = get_coords(last_results.pose_landmarks, LANDMARK.RIGHT_SHOULDER)
                                 hip_l = get_coords(last_results.pose_landmarks, LANDMARK.LEFT_HIP)
@@ -840,7 +943,6 @@ class GemaImamApp:
                                     (knee_l[1] + knee_r[1]) / 2.0
                                 ))
                             else:
-                                # Proses hasil kalibrasi
                                 if self.calibration_samples:
                                     avg_sh_y = np.mean([s[0] for s in self.calibration_samples])
                                     avg_hip_y = np.mean([s[1] for s in self.calibration_samples])
@@ -849,37 +951,20 @@ class GemaImamApp:
                                 self.calibrating = False
                                 self.calibration_samples = []
                                 print("[CALIBRATION] Selesai!")
-                
-                else:
-                    # Pose landmarks tidak terdeteksi — hitung frame tanpa imam
-                    self._no_imam_frames += 1
-                    if (self._no_imam_frames >= self._NO_IMAM_ALERT_FRAMES
-                            and not self._no_imam_notified
-                            and self.state_machine.current_state not in (POSE.SELESAI, POSE.UNKNOWN)):
-                        self._no_imam_notified = True
-                        print("[WARNING] Imam tidak terdeteksi selama >60 detik!")
-                        if USE_TELEGRAM and TELEGRAM_CHAT_ID:
-                            try:
-                                from telegram_notifier import send_telegram_message_async
-                                send_telegram_message_async(
-                                    "\u26a0\ufe0f *GEMA Imam - Imam Tidak Terdeteksi*\n"
-                                    "Sistem tidak dapat mendeteksi imam selama lebih dari 60 detik.\n"
-                                    "Kemungkinan penyebab:\n"
-                                    "\u2022 Imam keluar dari jangkauan kamera\n"
-                                    "\u2022 Pencahayaan ruangan terlalu gelap\n"
-                                    "\u2022 Kamera terhalang benda asing"
-                                )
-                            except Exception:
-                                pass
+                    else:
+                        self._no_imam_frames += 1
+                        if (self._no_imam_frames >= self._NO_IMAM_ALERT_FRAMES
+                                and not self._no_imam_notified
+                                and self.state_machine.current_state not in (POSE.SELESAI, POSE.UNKNOWN)):
+                            self._no_imam_notified = True
+                            print("[WARNING] Imam tidak terdeteksi selama >60 detik!")
                 
                 # Penanganan akhir sholat (salam kedua selesai) -> auto-reset untuk sholat berikutnya
                 if self.state_machine.current_state == POSE.SELESAI:
-                    print("[INFO] Sholat telah selesai dengan sempurna. Menyimpan log dan melakukan auto-reset...")
+                    print("[INFO] Sesi sholat selesai dengan sempurna. Mengirim laporan ke Web LMS...")
                     self.save_session_logs(force_cancel=False)
-                    self.state_machine.reset()
-                    self.audio_player.clear()
-                    self.imam_mistakes_count = 0
-                    self.start_timestamp = None
+                    self.lapor_sesi_selesai(self.current_session_id)
+                    break
                 elif self.state_machine.current_state == POSE.SALAM_KE_KIRI:
                     if self.audio_player.queue.empty() and not self.audio_player.current_playing_file:
                         print("[INFO] Audio Salam Ke Kiri selesai diputar. Menunggu jeda 5 detik...")
@@ -893,20 +978,13 @@ class GemaImamApp:
                 # UI Rendering
                 if HAS_DISPLAY:
                     if last_results and last_results.pose_landmarks:
-                        # Draw skeleton
                         visualizer.draw_skeleton(frame, last_results.pose_landmarks)
-                        
-                        # Draw debug overlay sudut
                         if self.debug_mode and last_features:
                             visualizer.draw_debug_angles(frame, last_results.pose_landmarks, last_features)
-                            
-                        # Draw alignment guide (Asisten Posisi Imam)
                         visualizer.draw_alignment_guide(frame, last_results.pose_landmarks)
                     else:
-                        # Jika tidak terdeteksi pose, gambar garis tengah bantu saja
                         visualizer.draw_alignment_guide(frame, None)
                             
-                    # Draw HUD
                     visualizer.draw_hud(
                         frame,
                         self.state_machine.current_state,
@@ -918,7 +996,6 @@ class GemaImamApp:
                         cpu_temp
                     )
                     
-                    # Rendering info kalibrasi jika sedang berjalan
                     if self.calibrating:
                         elapsed_cal = time.time() - self.calibration_start_time
                         remaining = max(0.0, 5.0 - elapsed_cal)
@@ -928,12 +1005,12 @@ class GemaImamApp:
                     
                     cv2.imshow("GEMA Imam", frame)
                     
-                    # Keyboard shortcuts
                     key = cv2.waitKey(1) & 0xFF
                     if key == KEY_QUIT:
-                        print("[INFO] Menutup program via keyboard shortcut.")
+                        print("[INFO] Menutup sesi sholat secara paksa via keyboard shortcut.")
                         self.audio_player.clear()
                         self.save_session_logs(force_cancel=True)
+                        self.lapor_sesi_selesai(self.current_session_id)
                         break
                     elif key == KEY_RESET:
                         self.reset_from_button()
@@ -957,46 +1034,83 @@ class GemaImamApp:
                             self.play_niat_audio()
                             self.start_session_logging()
                 else:
-                    # Headless Mode — cetak log ke terminal setiap 30 frame (~2 detik pada 15fps)
                     if frame_count % 30 == 0:
                         temp_str = f" | CPU Temp: {cpu_temp}°C" if cpu_temp is not None else ""
-                        print(f"[Headless] Frame: {frame_count} | FPS: {fps:.1f} | Pose: {last_classified_pose} | State: {self.state_machine.current_state} (Rakaat {self.state_machine.rakaat_count}){temp_str}")
+                        print(f"[Active Session] Frame: {frame_count} | FPS: {fps:.1f} | Pose: {last_classified_pose} | State: {self.state_machine.current_state} (Rakaat {self.state_machine.rakaat_count}){temp_str}")
                         
         except KeyboardInterrupt:
-            print("\n[INFO] Program dihentikan via KeyboardInterrupt.")
+            print("\n[INFO] Sesi sholat dihentikan via KeyboardInterrupt.")
             self.save_session_logs(force_cancel=True)
+            self.lapor_sesi_selesai(self.current_session_id)
         except Exception as crash_err:
-            # Crash tak terduga — catat dan kirim notifikasi Telegram
             import traceback
             tb_str = traceback.format_exc()
-            print(f"\n[CRITICAL] Program crash: {crash_err}")
+            print(f"\n[CRITICAL] Sesi sholat crash: {crash_err}")
             print(tb_str)
-            if USE_TELEGRAM and TELEGRAM_CHAT_ID:
-                try:
-                    from telegram_notifier import send_telegram_message
-                    crash_msg = (
-                        f"GEMA Imam - CRASH\n"
-                        f"Error: {type(crash_err).__name__}: {crash_err}\n"
-                        f"---\n"
-                        f"{tb_str[-800:]}"  # kirim 800 char terakhir traceback
-                    )
-                    send_telegram_message(crash_msg)
-                except Exception:
-                    pass
             self.save_session_logs(force_cancel=True)
+            self.lapor_sesi_selesai(self.current_session_id)
+        finally:
+            cap.release()
+            print(f"\nSesi selesai. Rata-rata FPS: {fps:.1f}")
+
+    def run(self):
+        # Start button listener (GPIO atau keyboard)
+        self.button_listener.start()
+        
+        # Mulai Telegram command listener jika chat ID aktif
+        if self.telegram_listener:
+            try:
+                self.telegram_listener.start()
+                self._send_startup_notification()
+            except Exception as e:
+                print(f"[TELEGRAM CMD WARNING] Gagal memulai command listener: {e}")
+                
+        print("\n==================================================")
+        print(" GEMA IMAM STANDBY MODE ACTIVE")
+        print(" Menunggu instruksi praktikum dari Web LMS...")
+        print("==================================================\n")
+        
+        try:
+            while True:
+                # 1. Tanya Web LMS apakah ada praktikum aktif
+                status_data = self.check_web_status()
+                
+                if status_data.get("status") == "active":
+                    session_id = status_data.get("session_id")
+                    student_name = status_data.get("student_name")
+                    
+                    self.current_session_id = session_id
+                    self.current_student_name = student_name
+                    
+                    # 2. Jalankan sesi AI aktif
+                    self.run_active_tracking_session()
+                    
+                    print("\n==================================================")
+                    print(" GEMA IMAM STANDBY MODE ACTIVE")
+                    print(" Menunggu instruksi praktikum dari Web LMS...")
+                    print("==================================================\n")
+                    
+                    self.current_session_id = None
+                    self.current_student_name = None
+                else:
+                    # 3. Mode Standby
+                    if HAS_DISPLAY:
+                        # Render dan tampilkan frame standby estetik di GUI
+                        self.show_standby_frame()
+                        key = cv2.waitKey(100) & 0xFF
+                        if key == ord('q'):
+                            print("[INFO] Menutup program secara manual dari mode Standby.")
+                            break
+                    else:
+                        # Headless mode standby log
+                        print("[Standby] Menunggu instruksi 'active' dari Web LMS...", end="\r")
+                        time.sleep(2)
         finally:
             self.button_listener.stop()
             if self.telegram_listener:
                 self.telegram_listener.stop()
-            cap.release()
             if HAS_DISPLAY:
                 cv2.destroyAllWindows()
-            
-            # Jika program selesai normal tanpa dicancel ditengah sholat
-            if self.state_machine.current_state == POSE.SELESAI:
-                self.save_session_logs(force_cancel=False)
-                
-            print(f"\nSesi selesai. Rata-rata FPS: {fps:.1f}")
 
 if __name__ == '__main__':
     print("=" * 55)

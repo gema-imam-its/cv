@@ -175,3 +175,36 @@ x11vnc -auth guess -forever -loop -noxdamage -repeat -rfbauth ~/.vnc/passwd -rfb
 4. **Selesai!** Layar desktop Orange Pi akan muncul secara nirkabel di laptop Anda secara real-time.
 
 
+## 9. Penggunaan Mode Integrasi Web LMS (Branch `feature/web-integration`)
+
+Pada branch `feature/web-integration`, alat GEMA Imam dirancang untuk bekerja secara harmonis dengan Web LMS. Di bawah ini adalah panduan cara menguji alur integrasi ini menggunakan simulasi lokal (*Mock Server*).
+
+### Langkah 1: Jalankan Mock Web LMS Server
+Untuk menguji alat tanpa harus menyalakan server Next.js riil, jalankan mock server simulasi yang telah disediakan:
+```bash
+python3 scratch/mock_lms_server.py
+```
+Server akan menyala di port `3000` dan siap mendengarkan sinyal dari Orange Pi.
+
+### Langkah 2: Jalankan GEMA Imam
+Buka terminal baru, aktifkan venv, lalu jalankan program GEMA Imam:
+```bash
+source venv/bin/activate
+python core/main.py
+```
+Aplikasi akan masuk ke dalam **Standby Mode** (menampilkan layar siaga abu-abu bertuliskan *"STATUS: STANDBY MODE"*) dan kamera belum menyala. Orange Pi akan memantau server setiap 2 detik secara hening.
+
+### Langkah 3: Berikan Perintah Mulai Praktikum
+Untuk menyimulasikan tindakan guru yang mengklik tombol "Mulai Praktik" di web, buka browser Anda atau gunakan curl untuk menembak endpoint trigger:
+* **Via Browser**: Buka alamat `http://localhost:3000/trigger_start`
+* **Via Terminal (curl)**: `curl -X POST http://localhost:3000/trigger_start`
+
+**Hasil**: Orange Pi akan langsung mendeteksi status `active`, menutup layar siaga, menyalakan kamera Logitech C270, dan memulai sesi pemantauan sholat (Budi).
+
+### Langkah 4: Kirim Gerakan & Selesai Sesi
+Setiap gerakan sholat yang terdeteksi (rukuk, sujud, dll.) akan secara otomatis dikalkulasikan akurasinya dan terkirim ke log mock server di terminal. 
+
+Setelah sholat selesai (Salam ke Kiri tuntas), sistem akan secara otomatis melapor sesi selesai, mematikan kamera, dan kembali ke **Standby Mode** untuk menunggu siswa berikutnya.
+
+
+
