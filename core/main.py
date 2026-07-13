@@ -60,7 +60,7 @@ import visualizer
 
 # Cek support display GUI
 HAS_DISPLAY = "DISPLAY" in os.environ or os.name == "nt"
-
+f
 def get_cpu_temp():
     """Membaca suhu CPU Orange Pi (Linux). Mengembalikan derajat Celsius atau None."""
     try:
