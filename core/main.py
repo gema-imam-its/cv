@@ -60,7 +60,7 @@ import visualizer
 
 # Cek support display GUI
 HAS_DISPLAY = "DISPLAY" in os.environ or os.name == "nt"
-f
+
 def get_cpu_temp():
     """Membaca suhu CPU Orange Pi (Linux). Mengembalikan derajat Celsius atau None."""
     try:
@@ -293,6 +293,7 @@ class GemaImamApp:
         # Variabel Sesi Web LMS
         self.current_session_id = None
         self.current_student_name = None
+        self.force_stop_session = False
         
         # Deteksi imam tidak terdeteksi
         self._no_imam_frames = 0
@@ -397,9 +398,14 @@ class GemaImamApp:
     def reset_from_button(self):
         """Callback untuk me-reset state sholat dari tombol GPIO atau keyboard 'r'."""
         print("[BUTTON] Reset sholat dipicu.")
+        if self.start_timestamp:
+            self.save_session_logs(force_cancel=True)
+            self.start_timestamp = None
+            
         self.state_machine.reset()
         self.audio_player.clear()
         self.imam_mistakes_count = 0
+        self.force_stop_session = True
 
     def check_web_status(self):
         """Mengecek ke Web LMS apakah ada sesi praktik aktif."""
@@ -828,6 +834,11 @@ class GemaImamApp:
                                 reconnect_success = True
                                 break
                     continue
+                    
+                if self.force_stop_session:
+                    print("\n[INFO] Sesi tracking dibatalkan karena reset/Telegram.")
+                    self.force_stop_session = False
+                    break
                     
                 frame_count += 1
                 

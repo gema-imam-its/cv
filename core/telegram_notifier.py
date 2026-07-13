@@ -320,17 +320,8 @@ class TelegramCommandListener:
     def _cmd_reset(self):
         app = self._app
         
-        # Simpan log sesi aktif sebelum melakukan reset (logika sama dengan KeyboardInterrupt/Ctrl+C)
-        if app.start_timestamp:
-            try:
-                app.save_session_logs(force_cancel=True)
-            except Exception as e:
-                print(f"[TELEGRAM CMD WARNING] Gagal menyimpan log saat reset: {e}")
-                
-        app.state_machine.reset()
-        app.audio_player.clear()
-        app.imam_mistakes_count = 0
-        app.start_timestamp = None
+        app.reset_from_button()
+        
         self._reply(
             f"🔄 Sholat {app.active_prayer} berhasil di-reset!\n"
             "Log sesi sebelumnya telah disimpan. Silakan mulai kembali dari awal."
