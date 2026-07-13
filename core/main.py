@@ -578,16 +578,18 @@ class GemaImamApp:
         
         # APPEND CURRENT ACTIVE STATE SO IT IS NOT LOST
         if self.state_machine.current_state != POSE.UNKNOWN:
-            # Check if this state is already the last one in completed_steps
-            # It shouldn't be, because we only append upon transition
             duration_last = 0
             if getattr(self.state_machine, 'state_start_time', None):
                 duration_last = time.time() - self.state_machine.state_start_time
+            
+            entry_t = getattr(self.state_machine, 'state_start_time_str', "00:00:00")
+            if entry_t == "-":
+                entry_t = "00:00:00"
                 
             self.state_machine.completed_steps.append({
                 "rakaat": self.state_machine.rakaat_count,
                 "state": self.state_machine.current_state,
-                "entry_time": getattr(self.state_machine, 'state_start_time_str', "-"),
+                "entry_time": entry_t,
                 "exit_time": time.strftime("%H:%M:%S") if not force_cancel else "Batal",
                 "duration_seconds": round(duration_last, 2),
                 "tumaninah_met": False, 
@@ -599,7 +601,6 @@ class GemaImamApp:
                 "wrist_dist_x": None,
                 "head_offset_x": None
             })
-            # Clear it so we don't append it again if save_session_logs is called twice somehow
             self.state_machine.current_state = POSE.UNKNOWN
 
         # Hitung statistik tuma'ninah
@@ -680,19 +681,26 @@ class GemaImamApp:
             
         # 2. Simpan JSON (Ringkasan Sesi - Terstruktur Sama Persis)
         json_filename = os.path.join(LOGS_DIR, f"sholat_{self.active_prayer}_{timestamp_str}.json")
+        tumaninah_score = 0
+        if total_tumaninah_check > 0:
+            tumaninah_score = (total_tumaninah_success / total_tumaninah_check) * 100
+            
         summary = {
             "sholat": self.active_prayer,
             "tanggal": self.start_timestamp.strftime("%Y-%m-%d %H:%M:%S"),
             "durasi_detik": round(duration, 1),
             "status": status_str,
             "total_rakaat_dilewati": self.state_machine.rakaat_count,
+            "total_rakaat": self.state_machine.rakaat_count, # backward compat
             "kesalahan_imam": self.imam_mistakes_count,
+            "total_kesalahan_imam": self.imam_mistakes_count, # backward compat
             "statistik_tumaninah": {
                 "total_gerakan_tumaninah": total_tumaninah_check,
                 "terpenuhi": total_tumaninah_success,
                 "tidak_terpenuhi": total_tumaninah_check - total_tumaninah_success,
                 "skor_persentase": round(tumaninah_score, 1)
             },
+            "skor_tumaninah_persen": round(tumaninah_score, 1), # backward compat
             "log_transisi": self.state_machine.completed_steps
         }
         try:
