@@ -294,7 +294,9 @@ class GemaImamApp:
         self.current_session_id = None
         self.current_student_name = None
         self.force_stop_session = False
-        
+        self._last_cancel_check = 0.0
+        self._cancel_check_in_flight = False
+
         # Deteksi imam tidak terdeteksi
         self._no_imam_frames = 0
         self._no_imam_notified = False
@@ -425,32 +427,43 @@ class GemaImamApp:
             pass
         return {"status": "idle"}
 
-    def kirim_nilai_ke_web(self, session_id, gerakan, nilai):
-        """Mengirim data akurasi gerakan sholat ke Web LMS secara asinkron."""
-        if not WEB_LMS_URL or not session_id:
+    def check_session_cancelled_async(self):
+        """Cek ke Web LMS (non-blocking, di background thread) apakah sesi
+        yang sedang direkam (self.current_session_id) masih berstatus ACTIVE,
+        atau sudah dibatalkan dari web (tombol "Batalkan Sesi"). Kalau sudah
+        tidak ACTIVE lagi, pakai jalur yang sama seperti reset fisik/Telegram
+        (reset_from_button) supaya sesi tersimpan sebagai Dibatalkan dan alat
+        kembali ke standby. Request gagal/timeout dianggap sesi TETAP
+        berjalan — jaringan yang sempat putus sesaat tidak boleh menghentikan
+        rekaman yang sah.
+        """
+        if not WEB_LMS_URL or not self.current_session_id or self._cancel_check_in_flight:
             return
 
-        def _send():
-            url = f"{WEB_LMS_URL.rstrip('/')}/api/iot/gerakan/catat"
-            headers = {
-                "x-api-key": WEB_LMS_API_KEY,
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "session_id": session_id,
-                "movement_type": gerakan,
-                "accuracy_score": int(nilai)
-            }
-            try:
-                res = requests.post(url, json=payload, headers=headers, timeout=5)
-                if res.status_code == 200:
-                    print(f"[WEB API] Nilai gerakan '{gerakan}' ({nilai}%) sukses terkirim ke Web LMS.")
-                else:
-                    print(f"[WEB API WARNING] Gagal mengirim gerakan. Status: {res.status_code}")
-            except Exception as e:
-                print(f"[WEB API WARNING] Gagal terhubung ke Web LMS untuk mencatat gerakan: {e}")
+        self._cancel_check_in_flight = True
+        session_id = self.current_session_id
 
-        threading.Thread(target=_send, daemon=True, name="WebAPIGerakanCatat").start()
+        def _check():
+            try:
+                url = f"{WEB_LMS_URL.rstrip('/')}/api/iot/status"
+                headers = {
+                    "x-api-key": WEB_LMS_API_KEY,
+                    "Content-Type": "application/json"
+                }
+                response = requests.get(
+                    url, headers=headers, params={"session_id": session_id}, timeout=3
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("active") is False and not self.force_stop_session:
+                        print("[WEB LMS] Sesi dibatalkan dari Web LMS (tombol 'Batalkan Sesi').")
+                        self.reset_from_button()
+            except Exception:
+                pass
+            finally:
+                self._cancel_check_in_flight = False
+
+        threading.Thread(target=_check, daemon=True, name="WebSessionCancelCheck").start()
 
     def lapor_sesi_selesai(self, session_id, payload=None):
         """Melaporkan ke Web LMS bahwa sesi sholat telah selesai,
@@ -870,10 +883,20 @@ class GemaImamApp:
                     continue
                     
                 if self.force_stop_session:
-                    print("\n[INFO] Sesi tracking dibatalkan karena reset/Telegram.")
+                    print("\n[INFO] Sesi tracking dibatalkan karena reset/Telegram/Web LMS.")
                     self.force_stop_session = False
                     break
-                    
+
+                # Cek ke Web LMS setiap ~3 detik (non-blocking, di background
+                # thread) apakah sesi ini sudah dibatalkan dari web (tombol
+                # "Batalkan Sesi"). Kalau iya, check_session_cancelled_async()
+                # akan memicu reset_from_button() yang men-set force_stop_session
+                # (dicek di atas pada iterasi berikutnya).
+                now_ts = time.time()
+                if now_ts - self._last_cancel_check >= 3.0:
+                    self._last_cancel_check = now_ts
+                    self.check_session_cancelled_async()
+
                 frame_count += 1
                 
                 # Baca suhu CPU setiap 150 frame
@@ -949,36 +972,6 @@ class GemaImamApp:
                                         if audio_state:
                                             self.audio_player.play(audio_state)
                                 
-                                # --- INTEGRASI SINKRONISASI GERAKAN REAL-TIME DENGAN WEB LMS ---
-                                if self.current_session_id and len(self.state_machine.completed_steps) >= 2:
-                                    prev_step = self.state_machine.completed_steps[-2]
-                                    
-                                    # Hitung akurasi gerakan berdasarkan tuma'ninah dan gerakan menyimpang
-                                    score = 100
-                                    if prev_step.get("tumaninah_met") is False:
-                                        score -= 40  # Penalti jika tidak tuma'ninah
-                                    dev_count = len(prev_step.get("gerakan_menyimpang", []))
-                                    score -= min(60, dev_count * 20)  # Penalti gerakan menyimpang
-                                    score = max(0, score)
-                                    
-                                    # Petakan enum POSE ke string yang didukung Web
-                                    pose_mapping = {
-                                        POSE.BERDIRI_TEGAK: "berdiri",
-                                        POSE.BERSEDEKAP: "sedekap",
-                                        POSE.RUKUK: "rukuk",
-                                        POSE.ITIDAL: "itidal",
-                                        POSE.SUJUD_PERTAMA: "sujud",
-                                        POSE.SUJUD_KEDUA: "sujud",
-                                        POSE.DUDUK_DI_ANTARA_DUA_SUJUD: "duduk",
-                                        POSE.DUDUK_TASYAHUD_AWAL: "duduk",
-                                        POSE.DUDUK_TASYAHUD_AKHIR: "duduk",
-                                        POSE.SALAM_KE_KANAN: "salam",
-                                        POSE.SALAM_KE_KIRI: "salam"
-                                    }
-                                    m_type = pose_mapping.get(prev_step["state"])
-                                    if m_type:
-                                        self.kirim_nilai_ke_web(self.current_session_id, m_type, score)
-                                        
                         # Logika Kalibrasi Tinggi Badan
                         if self.calibrating:
                             elapsed_cal = time.time() - self.calibration_start_time
