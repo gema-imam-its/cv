@@ -296,6 +296,10 @@ class GemaImamApp:
         self.force_stop_session = False
         self._last_cancel_check = 0.0
         self._cancel_check_in_flight = False
+        # MAC address speaker Bluetooth yang terakhir berhasil terhubung
+        # (diisi dari .env saat startup, diperbarui saat /bt atau Web LMS request)
+        from config import BLUETOOTH_SPEAKER_MAC
+        self._last_bt_mac = BLUETOOTH_SPEAKER_MAC or ""
 
         # Deteksi imam tidak terdeteksi
         self._no_imam_frames = 0
@@ -774,6 +778,8 @@ class GemaImamApp:
                 print(f"[TELEGRAM WARNING] Gagal mengirim laporan/dokumen telegram: {e}")
 
         # 4. Rotasi log — hapus sesi terlama jika sudah > 60 sesi
+        self.rotate_logs()
+
     def run_active_tracking_session(self):
         camera_index = ACTIVE_PROFILE["camera_index"]
         backend_str = ACTIVE_PROFILE.get("camera_backend", None)
@@ -1135,6 +1141,21 @@ class GemaImamApp:
                     self.current_session_id = None
                     self.current_student_name = None
                 else:
+                    # Cek apakah Web LMS meminta ganti speaker Bluetooth
+                    requested_mac = status_data.get("bluetooth_mac", "").strip().upper()
+                    if requested_mac and requested_mac != self._last_bt_mac:
+                        print(f"[BT] Web LMS meminta ganti speaker ke: {requested_mac}")
+                        def _switch_bt(mac=requested_mac):
+                            from telegram_notifier import connect_bluetooth
+                            ok, msg = connect_bluetooth(mac)
+                            if ok:
+                                self._last_bt_mac = mac
+                                print(f"[BT] ✅ Speaker diganti ke {mac} atas perintah Web LMS.")
+                            else:
+                                print(f"[BT] ⚠️  Gagal ganti speaker ke {mac}: {msg}")
+                        import threading
+                        threading.Thread(target=_switch_bt, daemon=True, name="BtSwitchWeb").start()
+
                     # 3. Mode Standby
                     if HAS_DISPLAY:
                         # Render dan tampilkan frame standby estetik di GUI

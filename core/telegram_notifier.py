@@ -121,6 +121,142 @@ def get_telegram_chat_id():
     return None
 
 
+def connect_bluetooth(mac_address, retries=3, retry_delay=3):
+    """Koneksikan ke speaker Bluetooth berdasarkan MAC Address secara sinkron.
+
+    Melakukan disconnect dari perangkat yang terhubung saat ini (jika ada),
+    lalu connect ke MAC baru. PulseAudio otomatis mendeteksi sink baru.
+
+    Returns:
+        (True, "OK")                  — berhasil terhubung
+        (False, "<pesan error>")       — gagal setelah semua percobaan
+    """
+    import subprocess
+    import re
+
+    # Sanitasi MAC address
+    mac = mac_address.strip().upper()
+    if not re.match(r'^([0-9A-F]{2}:){5}[0-9A-F]{2}$', mac):
+        return False, f"Format MAC tidak valid: {mac}"
+
+    print(f"[BT] Mencoba menghubungkan ke {mac} ...")
+
+    for attempt in range(1, retries + 1):
+        try:
+            result = subprocess.run(
+                ["bluetoothctl", "connect", mac],
+                capture_output=True, text=True, timeout=15
+            )
+            output = result.stdout + result.stderr
+            if "Connection successful" in output or "AlreadyConnected" in output:
+                print(f"[BT] ✅ Berhasil terhubung ke {mac} (percobaan {attempt})")
+                # Beri jeda agar PulseAudio mendaftarkan sink Bluetooth baru
+                time.sleep(2)
+                return True, "OK"
+            else:
+                print(f"[BT] Percobaan {attempt}/{retries} gagal: {output.strip()}")
+        except subprocess.TimeoutExpired:
+            print(f"[BT] Percobaan {attempt}/{retries} timeout.")
+        except FileNotFoundError:
+            return False, "bluetoothctl tidak ditemukan di sistem."
+        except Exception as e:
+            return False, str(e)
+
+        if attempt < retries:
+            time.sleep(retry_delay)
+
+    return False, f"Gagal terhubung ke {mac} setelah {retries} percobaan."
+
+
+def switch_audio_sink(mode):
+    """Pindahkan audio output ke sink yang sesuai menggunakan PulseAudio (pactl).
+
+    Args:
+        mode: "jack" untuk audio kabel (3.5mm/HDMI/USB), "bt" untuk Bluetooth.
+
+    Returns:
+        (True, sink_name)          — berhasil, nama sink yang dipilih
+        (False, "<pesan error>")   — gagal
+    """
+    import subprocess
+
+    try:
+        # Ambil daftar semua sink yang tersedia
+        result = subprocess.run(
+            ["pactl", "list", "short", "sinks"],
+            capture_output=True, text=True, timeout=5
+        )
+        sinks_raw = result.stdout.strip().splitlines()
+    except FileNotFoundError:
+        return False, "pactl tidak ditemukan. Pastikan PulseAudio/PipeWire sudah terinstall."
+    except Exception as e:
+        return False, f"Gagal mengambil daftar sink: {e}"
+
+    if not sinks_raw:
+        return False, "Tidak ada sink audio yang terdeteksi oleh PulseAudio."
+
+    # Kata kunci identifikasi tipe sink di Linux/Orange Pi
+    # Bluetooth: nama sink mengandung "bluez"
+    # Kabel (jack/HDMI/USB): mengandung "alsa", "analog", "hdmi", atau "usb"
+    BT_KEYWORDS   = ["bluez", "bluetooth"]
+    JACK_KEYWORDS = ["alsa", "analog", "hdmi", "usb", "hw:", "_card"]
+
+    chosen_sink = None
+    all_sinks   = []
+
+    for line in sinks_raw:
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        sink_name = parts[1]
+        all_sinks.append(sink_name)
+        sink_lower = sink_name.lower()
+
+        if mode == "bt" and any(kw in sink_lower for kw in BT_KEYWORDS):
+            chosen_sink = sink_name
+            break
+        elif mode == "jack" and any(kw in sink_lower for kw in JACK_KEYWORDS):
+            chosen_sink = sink_name
+            break
+
+    if not chosen_sink:
+        mode_label = "Bluetooth" if mode == "bt" else "kabel (jack/HDMI/USB)"
+        return False, (
+            f"Sink {mode_label} tidak ditemukan.\n"
+            f"Sink tersedia: {', '.join(all_sinks) or 'tidak ada'}"
+        )
+
+    # Set sebagai default sink
+    try:
+        subprocess.run(
+            ["pactl", "set-default-sink", chosen_sink],
+            capture_output=True, timeout=5, check=True
+        )
+    except subprocess.CalledProcessError as e:
+        return False, f"Gagal set-default-sink: {e}"
+    except Exception as e:
+        return False, str(e)
+
+    # Pindahkan semua stream audio yang sedang aktif ke sink baru
+    try:
+        inputs_result = subprocess.run(
+            ["pactl", "list", "short", "sink-inputs"],
+            capture_output=True, text=True, timeout=5
+        )
+        for inp_line in inputs_result.stdout.strip().splitlines():
+            inp_parts = inp_line.split()
+            if inp_parts:
+                subprocess.run(
+                    ["pactl", "move-sink-input", inp_parts[0], chosen_sink],
+                    capture_output=True, timeout=5
+                )
+    except Exception:
+        pass  # Tidak kritis — stream baru akan otomatis pakai default sink
+
+    print(f"[AUDIO] ✅ Default sink diganti ke: {chosen_sink}")
+    return True, chosen_sink
+
+
 class TelegramCommandListener:
     """
     Listener background untuk menerima dan mengeksekusi perintah dari Telegram Bot.
@@ -253,6 +389,10 @@ class TelegramCommandListener:
             self._cmd_sholat(args)
         elif command == "/log":
             self._cmd_log()
+        elif command == "/bt":
+            self._cmd_bt(args)
+        elif command == "/audio":
+            self._cmd_audio(args)
         else:
             self._reply(
                 f"Perintah `{command}` tidak dikenal.\n\nKetik /help untuk melihat daftar perintah."
@@ -276,6 +416,12 @@ class TelegramCommandListener:
             "/sholat <nama>     - Ganti sholat aktif\n"
             "  Contoh: /sholat subuh\n"
             "  Pilihan: subuh, dhuhur, ashar, maghrib, isya\n"
+            "/bt <MAC_ADDRESS>  - Ganti speaker Bluetooth saat runtime\n"
+            "  Contoh: /bt B8:F6:53:XX:XX:XX\n"
+            "/audio <mode>      - Ganti output audio\n"
+            "  /audio jack      - Output ke speaker kabel (3.5mm/HDMI/USB)\n"
+            "  /audio bt        - Output ke speaker Bluetooth\n"
+            "  /audio list      - Tampilkan semua sink yang tersedia\n"
             "/log               - Kirim file log sesi terakhir\n"
             "/help              - Tampilkan pesan ini"
         )
@@ -392,3 +538,109 @@ class TelegramCommandListener:
                 self._reply("Gagal mengirim file log. Coba lagi nanti.")
         except Exception as e:
             self._reply(f"Error saat mengambil log: {e}")
+
+    def _cmd_bt(self, args):
+        """Ganti speaker Bluetooth aktif saat runtime tanpa merestart program."""
+        if not args:
+            self._reply(
+                "Format salah. Gunakan:\n"
+                "`/bt B8:F6:53:XX:XX:XX`\n\n"
+                "Cara mendapatkan MAC Address:\n"
+                "Jalankan `bluetoothctl devices` di terminal Orange Pi."
+            )
+            return
+
+        new_mac = args[0].upper()
+        # Validasi format MAC address sederhana (AA:BB:CC:DD:EE:FF)
+        import re
+        if not re.match(r'^([0-9A-F]{2}:){5}[0-9A-F]{2}$', new_mac):
+            self._reply(
+                f"Format MAC Address `{new_mac}` tidak valid.\n"
+                "Contoh format yang benar: `B8:F6:53:1A:2B:3C`"
+            )
+            return
+
+        self._reply(f"Menghubungkan ke speaker Bluetooth `{new_mac}`...")
+
+        def _do_connect():
+            ok, msg = connect_bluetooth(new_mac)
+            if ok:
+                self._reply(
+                    f"Speaker Bluetooth berhasil diganti!\n"
+                    f"MAC Aktif: `{new_mac}`\n"
+                    "Audio akan otomatis diarahkan ke speaker baru."
+                )
+            else:
+                self._reply(
+                    f"Gagal terhubung ke `{new_mac}`.\n"
+                    f"Detail: {msg}\n\n"
+                    "Pastikan speaker sudah dinyalakan dan dalam jangkauan Bluetooth Orange Pi."
+                )
+
+        import threading
+        threading.Thread(target=_do_connect, daemon=True, name="BtSwitch").start()
+
+    def _cmd_audio(self, args):
+        """Switch output audio antara speaker kabel (jack) dan Bluetooth via PulseAudio."""
+        import subprocess
+
+        if not args or args[0] not in ("jack", "bt", "list"):
+            self._reply(
+                "Format salah. Pilihan:\n"
+                "/audio jack   — output ke speaker kabel (3.5mm / HDMI / USB)\n"
+                "/audio bt     — output ke speaker Bluetooth\n"
+                "/audio list   — tampilkan semua sink audio yang tersedia"
+            )
+            return
+
+        mode = args[0]
+
+        # Mode list: tampilkan semua sink tanpa mengubah apapun
+        if mode == "list":
+            try:
+                result = subprocess.run(
+                    ["pactl", "list", "short", "sinks"],
+                    capture_output=True, text=True, timeout=5
+                )
+                sinks = result.stdout.strip()
+                if not sinks:
+                    self._reply("Tidak ada sink audio yang terdeteksi.")
+                    return
+                # Format output agar mudah dibaca di Telegram
+                lines = []
+                for line in sinks.splitlines():
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        lines.append(f"• {parts[1]}")
+                self._reply(
+                    "🔊 Sink audio tersedia di Orange Pi:\n" +
+                    "\n".join(lines) +
+                    "\n\nGunakan /audio jack atau /audio bt untuk berpindah."
+                )
+            except FileNotFoundError:
+                self._reply("pactl tidak ditemukan. PulseAudio/PipeWire belum terinstall?")
+            except Exception as e:
+                self._reply(f"Gagal mengambil daftar sink: {e}")
+            return
+
+        # Mode jack atau bt: jalankan di background agar tidak blokir polling
+        mode_label = "kabel (jack/HDMI/USB)" if mode == "jack" else "Bluetooth"
+        self._reply(f"Mengalihkan audio ke {mode_label}...")
+
+        def _do_switch(m=mode, label=mode_label):
+            ok, result = switch_audio_sink(m)
+            if ok:
+                self._reply(
+                    f"✅ Audio berhasil dialihkan ke {label}!\n"
+                    f"Sink aktif: `{result}`\n"
+                    "Semua audio yang sedang diputar sudah dipindahkan ke output baru."
+                )
+            else:
+                self._reply(
+                    f"❌ Gagal mengalihkan ke {label}.\n"
+                    f"Detail: {result}\n\n"
+                    "Coba /audio list untuk melihat sink yang tersedia."
+                )
+
+        import threading
+        threading.Thread(target=_do_switch, daemon=True, name="AudioSwitch").start()
