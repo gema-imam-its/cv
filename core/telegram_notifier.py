@@ -221,9 +221,11 @@ def switch_audio_sink(mode):
 
     if not chosen_sink:
         mode_label = "Bluetooth" if mode == "bt" else "kabel (jack/HDMI/USB)"
+        # Bungkus setiap nama sink dengan backtick agar aman dari markdown parse error (karena ada '_')
+        formatted_sinks = [f"`{s}`" for s in all_sinks]
         return False, (
             f"Sink {mode_label} tidak ditemukan.\n"
-            f"Sink tersedia: {', '.join(all_sinks) or 'tidak ada'}"
+            f"Sink tersedia: {', '.join(formatted_sinks) or 'tidak ada'}"
         )
 
     # Set sebagai default sink
@@ -611,16 +613,16 @@ class TelegramCommandListener:
                 for line in sinks.splitlines():
                     parts = line.split()
                     if len(parts) >= 2:
-                        lines.append(f"• {parts[1]}")
+                        lines.append(f"• `{parts[1]}`")
                 self._reply(
                     "🔊 Sink audio tersedia di Orange Pi:\n" +
                     "\n".join(lines) +
-                    "\n\nGunakan /audio jack atau /audio bt untuk berpindah."
+                    "\n\nGunakan `/audio jack` atau `/audio bt` untuk berpindah."
                 )
             except FileNotFoundError:
                 self._reply("pactl tidak ditemukan. PulseAudio/PipeWire belum terinstall?")
             except Exception as e:
-                self._reply(f"Gagal mengambil daftar sink: {e}")
+                self._reply(f"Gagal mengambil daftar sink: `{e}`")
             return
 
         # Mode jack atau bt: jalankan di background agar tidak blokir polling
@@ -638,8 +640,8 @@ class TelegramCommandListener:
             else:
                 self._reply(
                     f"❌ Gagal mengalihkan ke {label}.\n"
-                    f"Detail: {result}\n\n"
-                    "Coba /audio list untuk melihat sink yang tersedia."
+                    f"Detail:\n`{result}`\n\n"
+                    "Coba `/audio list` untuk melihat sink yang tersedia."
                 )
 
         import threading

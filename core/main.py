@@ -356,16 +356,15 @@ class GemaImamApp:
         if USE_TELEGRAM and not TELEGRAM_CHAT_ID:
             self.run_telegram_setup_helper()
 
-        # Mulai Telegram command listener (jika chat ID sudah dikonfigurasi)
+        # Inisialisasi Telegram command listener (jika chat ID sudah dikonfigurasi)
+        # (Akan di-start di method run() untuk mencegah double-start)
         self.telegram_listener = None
         if USE_TELEGRAM and TELEGRAM_CHAT_ID:
             try:
                 from telegram_notifier import TelegramCommandListener
                 self.telegram_listener = TelegramCommandListener(app_ref=self)
-                self.telegram_listener.start()
-                self._send_startup_notification()
             except Exception as e:
-                print(f"[TELEGRAM CMD WARNING] Gagal memulai command listener: {e}")
+                print(f"[TELEGRAM CMD WARNING] Gagal menginisialisasi command listener: {e}")
 
     def _send_startup_notification(self):
         """Kirim pesan notifikasi startup ke Telegram secara async."""
