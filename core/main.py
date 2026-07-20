@@ -15,7 +15,6 @@ if project_root not in sys.path:
 
 import time
 import json
-import csv
 from datetime import datetime
 import cv2
 import mediapipe as mp
@@ -617,7 +616,7 @@ class GemaImamApp:
             print(f"[WARNING] Gagal rotasi log: {e}")
 
     def save_session_logs(self, force_cancel=False):
-        """Menyimpan log transisi gerakan (CSV) dan ringkasan sesi (JSON)."""
+        """Menyimpan ringkasan sesi sholat ke file JSON."""
         if not self.start_timestamp:
             return
             
@@ -663,93 +662,29 @@ class GemaImamApp:
                     
         tumaninah_score = (total_tumaninah_success / total_tumaninah_check * 100.0) if total_tumaninah_check > 0 else 100.0
         
-        # 1. Simpan CSV (Detail Gerakan Rakaat demi Rakaat dengan Metadata Rinci)
-        csv_filename = os.path.join(LOGS_DIR, f"sholat_{self.active_prayer}_{timestamp_str}.csv")
-        try:
-            with open(csv_filename, "w", newline="") as f:
-                writer = csv.writer(f)
-                
-                # Metadata Sholat (Bagian Atas CSV)
-                writer.writerow(["=== METADATA SESI SHOLAT ==="])
-                writer.writerow(["Nama Sholat", self.active_prayer])
-                writer.writerow(["Waktu Mulai", self.start_timestamp.strftime("%Y-%m-%d %H:%M:%S")])
-                writer.writerow(["Durasi Total (Detik)", round(duration, 1)])
-                writer.writerow(["Status Akhir", status_str])
-                writer.writerow(["Rakaat Diselesaikan", self.state_machine.rakaat_count])
-                writer.writerow(["Total Kesalahan Imam", self.imam_mistakes_count])
-                tumaninah_kpi_str = f"{tumaninah_score:.1f}% ({total_tumaninah_success}/{total_tumaninah_check})" if total_tumaninah_check > 0 else "N/A"
-                writer.writerow(["Skor Tuma'ninah", tumaninah_kpi_str])
-                writer.writerow([])  # Baris Kosong Pemisah
-                
-                # Detail Gerakan Per Rakaat
-                writer.writerow(["=== DETAIL GERAKAN RAKAAT DEMI RAKAAT ==="])
-                writer.writerow([
-                    "Rakaat", 
-                    "Gerakan/State", 
-                    "Waktu Masuk", 
-                    "Waktu Keluar", 
-                    "Durasi (Detik)", 
-                    "Tuma'ninah Terpenuhi", 
-                    "Kesalahan (Bacaan Terpotong)",
-                    "Gerakan Menyimpang (Jitter)",
-                    "Sudut Pinggul (Hip Degree)",
-                    "Sudut Lutut (Knee Degree)",
-                    "Sudut Lengan (Arm Degree)",
-                    "Jarak Pergelangan X (Wrist Dist X)",
-                    "Deviasi Kepala X (Head Offset X)"
-                ])
-                for step in self.state_machine.completed_steps:
-                    tumaninah_met_val = step.get("tumaninah_met")
-                    tumaninah_str = "N/A"
-                    if tumaninah_met_val is True:
-                        tumaninah_str = "Ya"
-                    elif tumaninah_met_val is False:
-                        tumaninah_str = "Tidak"
-                        
-                    dev_mv = step.get("gerakan_menyimpang", [])
-                    dev_mv_str = ", ".join(dev_mv) if dev_mv else "-"
-                        
-                    writer.writerow([
-                        step.get("rakaat", 1),
-                        POSE.DISPLAY_NAME.get(step.get("state"), step.get("state", "UNKNOWN")),
-                        step.get("entry_time", "-"),
-                        step.get("exit_time") if step.get("exit_time") else ("Selesai" if not force_cancel else "Batal"),
-                        step.get("duration_seconds") if step.get("duration_seconds") is not None else "-",
-                        tumaninah_str,
-                        f"Ya (Bacaan: {step.get('bacaan_terpotong')})" if step.get("bacaan_terpotong") else "-",
-                        dev_mv_str,
-                        step.get("hip_angle", "-"),
-                        step.get("knee_angle", "-"),
-                        step.get("arm_angle", "-"),
-                        step.get("wrist_dist_x", "-"),
-                        step.get("head_offset_x", "-")
-                    ])
-            print(f"[LOGGER] Log CSV detail disimpan di: {csv_filename}")
-        except Exception as e:
-            print(f"[ERROR] Gagal menyimpan log CSV: {e}")
-            
-        # 2. Simpan JSON (Ringkasan Sesi - Terstruktur Sama Persis)
+        # Simpan JSON (Ringkasan + Detail Lengkap)
         json_filename = os.path.join(LOGS_DIR, f"sholat_{self.active_prayer}_{timestamp_str}.json")
         tumaninah_score = 0
         if total_tumaninah_check > 0:
             tumaninah_score = (total_tumaninah_success / total_tumaninah_check) * 100
             
         summary = {
+            "session_id": self.current_session_id,
             "sholat": self.active_prayer,
             "tanggal": self.start_timestamp.strftime("%Y-%m-%d %H:%M:%S"),
             "durasi_detik": round(duration, 1),
             "status": status_str,
             "total_rakaat_dilewati": self.state_machine.rakaat_count,
-            "total_rakaat": self.state_machine.rakaat_count, # backward compat
+            "total_rakaat": self.state_machine.rakaat_count,
             "kesalahan_imam": self.imam_mistakes_count,
-            "total_kesalahan_imam": self.imam_mistakes_count, # backward compat
+            "total_kesalahan_imam": self.imam_mistakes_count,
             "statistik_tumaninah": {
                 "total_gerakan_tumaninah": total_tumaninah_check,
                 "terpenuhi": total_tumaninah_success,
                 "tidak_terpenuhi": total_tumaninah_check - total_tumaninah_success,
                 "skor_persentase": round(tumaninah_score, 1)
             },
-            "skor_tumaninah_persen": round(tumaninah_score, 1), # backward compat
+            "skor_tumaninah_persen": round(tumaninah_score, 1),
             "log_transisi": self.state_machine.completed_steps
         }
         try:
@@ -801,9 +736,7 @@ class GemaImamApp:
                 print("[TELEGRAM] Mengirim laporan KPI ke Telegram...")
                 send_telegram_message(msg)
                 
-                # Kirim file CSV dan JSON langsung secara otomatis!
-                if os.path.exists(csv_filename):
-                    send_telegram_document(csv_filename, caption=f"Detail Gerakan: {os.path.basename(csv_filename)}")
+                # Kirim file JSON secara otomatis
                 if os.path.exists(json_filename):
                     send_telegram_document(json_filename, caption=f"Ringkasan Sesi: {os.path.basename(json_filename)}")
             except Exception as e:
