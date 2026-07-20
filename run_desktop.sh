@@ -15,6 +15,20 @@ source "$PROJECT_DIR/venv/bin/activate"
 # Pindah ke direktori project
 cd "$PROJECT_DIR"
 
+# Muat semua variabel dari .env ke environment (WEB_LMS_URL, WEB_LMS_API_KEY,
+# dll.) — sebelumnya script ini cuma baca BLUETOOTH_SPEAKER_MAC secara manual
+# lewat grep, tanpa pernah meng-export isi .env lainnya ke proses python di
+# bawah. Akibatnya WEB_LMS_URL/WEB_LMS_API_KEY selalu kosong saat dijalankan
+# lewat autostart XFCE, dan alat diam di STANDBY MODE walau "Mulai Sesi" sudah
+# diklik di website (config.py tidak pernah baca .env sendiri, cuma os.environ).
+if [ -f "$PROJECT_DIR/.env" ]; then
+    set -a
+    source "$PROJECT_DIR/.env"
+    set +a
+else
+    echo "  [ENV] ⚠️  Berkas .env tidak ditemukan di $PROJECT_DIR — WEB_LMS_URL dkk. tidak akan terisi."
+fi
+
 # Jalankan x11vnc server secara otomatis di background jika belum aktif
 if ! pgrep -x "x11vnc" >/dev/null; then
     echo "  [VNC] Menjalankan x11vnc server otomatis..."

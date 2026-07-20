@@ -1277,5 +1277,16 @@ if __name__ == '__main__':
     print("=" * 55)
     print(" GEMA Imam — Sholat Tracking System")
     print("=" * 55)
+    # Cetak status konfigurasi Web LMS di awal — tanpa ini, kalau
+    # WEB_LMS_URL kosong (mis. .env tidak ke-load), alat cuma diam di
+    # STANDBY MODE selamanya tanpa ada petunjuk kenapa "Mulai Sesi" di
+    # website tidak pernah terdeteksi.
+    if WEB_LMS_URL:
+        print(f" [CONFIG] WEB_LMS_URL   : {WEB_LMS_URL}")
+        print(f" [CONFIG] WEB_LMS_API_KEY: {'(terisi)' if WEB_LMS_API_KEY else '(KOSONG!)'}")
+    else:
+        print(" [CONFIG] ⚠️  WEB_LMS_URL KOSONG — polling ke Web LMS DINONAKTIFKAN.")
+        print(" [CONFIG] ⚠️  Cek apakah .env ada & ter-load dengan benar sebelum lapor 'tidak terdeteksi'.")
+    print("=" * 55)
     app = GemaImamApp()
     app.run()
