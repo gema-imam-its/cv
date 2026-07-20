@@ -132,7 +132,7 @@ def classify_pose(landmarks):
             
         # 1. Iqomah: Hanya tangan KANAN yang sejajar kepala, tangan kiri tetap di bawah
         #    Imam mengangkat satu tangan kanan sebagai isyarat iqomah
-        if feat["wrist_r_near_head"] and not feat["wrist_l_near_head"]:
+        if feat["wrist_l_near_head"] and not feat["wrist_r_near_head"]:
             return POSE.IQOMAH
 
         # 2. Takbiratul Ihram: Kedua telapak tangan sejajar dengan kepala (setinggi hidung/telinga)
