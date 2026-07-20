@@ -199,7 +199,7 @@ def switch_audio_sink(mode):
     # Bluetooth: nama sink mengandung "bluez"
     # Kabel (jack/HDMI/USB): mengandung "alsa", "analog", "hdmi", atau "usb"
     BT_KEYWORDS   = ["bluez", "bluetooth"]
-    JACK_KEYWORDS = ["alsa", "analog", "hdmi", "usb", "hw:", "_card"]
+    JACK_KEYWORDS = ["alsa", "analog", "hdmi", "usb", "hw:", "_card", "codec", "playback"]
 
     chosen_sink = None
     all_sinks   = []
