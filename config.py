@@ -369,3 +369,12 @@ TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
 WEB_LMS_URL        = os.environ.get("WEB_LMS_URL", "")
 WEB_LMS_API_KEY    = os.environ.get("WEB_LMS_API_KEY", "")
 
+# ─────────────────────────────────────────────────────────────
+# 13. BLUETOOTH SPEAKER
+# ─────────────────────────────────────────────────────────────
+# MAC address speaker Bluetooth default yang akan dikoneksikan saat startup.
+# Bisa diubah saat runtime melalui perintah Telegram /bt <MAC>
+# atau melalui field "bluetooth_mac" dari response API Web LMS.
+# Kosongkan (BLUETOOTH_SPEAKER_MAC="") jika tidak menggunakan Bluetooth.
+# Cara mendapatkan MAC: jalankan `bluetoothctl devices` di terminal Orange Pi.
+BLUETOOTH_SPEAKER_MAC = os.environ.get("BLUETOOTH_SPEAKER_MAC", "")
