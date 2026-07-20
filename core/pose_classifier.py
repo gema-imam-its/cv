@@ -130,7 +130,12 @@ def classify_pose(landmarks):
     if (feat["hip_angle"] > THRESHOLDS["HIP_STRAIGHT_MIN"] and 
             feat["knee_angle"] > THRESHOLDS["KNEE_STRAIGHT_MIN"]):
             
-        # 1. Takbiratul Ihram: Kedua telapak tangan sejajar dengan kepala (setinggi hidung/telinga)
+        # 1. Iqomah: Hanya tangan KANAN yang sejajar kepala, tangan kiri tetap di bawah
+        #    Imam mengangkat satu tangan kanan sebagai isyarat iqomah
+        if feat["wrist_r_near_head"] and not feat["wrist_l_near_head"]:
+            return POSE.IQOMAH
+
+        # 2. Takbiratul Ihram: Kedua telapak tangan sejajar dengan kepala (setinggi hidung/telinga)
         #    Juga tetap harus di atas bahu (validasi tambahan agar tidak bentrok dengan sedekap)
         if (feat["wrist_l_near_head"] and feat["wrist_r_near_head"]):
             # Validasi sudut siku: lengan terbuka / terangkat

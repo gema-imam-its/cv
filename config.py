@@ -215,7 +215,8 @@ class LANDMARK:
 class POSE:
     """Nama string untuk setiap state/pose sholat."""
     UNKNOWN                    = "UNKNOWN"
-    BERDIRI_TEGAK              = "BERDIRI_TEGAK"              # Berdiri Tegak / Niat
+    IQOMAH                     = "IQOMAH"                     # Iqomah: imam angkat tangan kanan sejajar telinga
+    BERDIRI_TEGAK              = "BERDIRI_TEGAK"              # Berdiri Tegak (transisi antar rakaat)
     TAKBIRATUL_IHRAM           = "TAKBIRATUL_IHRAM"           # Takbiratul Ihram (Allahu Akbar)
     BERSEDEKAP                 = "BERSEDEKAP"                 # Bersedekap (Membaca Al-Fatihah, dll)
     RUKUK                      = "RUKUK"                      # Rukuk
@@ -235,7 +236,8 @@ class POSE:
 
     # Deskripsi UI yang ditampilkan ke pengguna
     DISPLAY_NAME = {
-        UNKNOWN:                    "Tidak Terdeteksi",
+        UNKNOWN:                    "Tidak Terdeteksi / Persiapan",
+        IQOMAH:                     "Iqomah",
         BERDIRI_TEGAK:              "Berdiri Tegak",
         TAKBIRATUL_IHRAM:           "Takbiratul Ihram",
         BERSEDEKAP:                 "Bersedekap",
@@ -257,6 +259,7 @@ class POSE:
 # ─────────────────────────────────────────────────────────────
 # Audio yang diputar saat MEMASUKI suatu state (bacaan utama di posisi tersebut)
 AUDIO_STATE_MAP = {
+    POSE.IQOMAH:                    "iqomah.WAV",             # Bacaan Iqomah
     POSE.TAKBIRATUL_IHRAM:          "takbiratul-ihram.WAV",   # "Allahu Akbar" (Takbiratul Ihram)
     POSE.BERSEDEKAP:                "iftitah.WAV",            # Doa Iftitah (hanya rakaat 1, lihat logic)
     POSE.RUKUK:                     "ruku.WAV",               # Doa/Tasbih Rukuk
@@ -288,13 +291,8 @@ AUDIO_TRANSITION_MAP = {
     (POSE.RUKUK,    POSE.ITIDAL):                   "tasmi.WAV",     # "Sami'allahu liman hamidah"
 }
 
-# Audio tambahan per sholat (niat, Al-Fatihah, Surat)
+# Audio tambahan per sholat (Al-Fatihah, Surat)
 AUDIO_EXTRA = {
-    "niat_subuh":   "niat-subuh.WAV",
-    "niat_dzuhur":  "niat-dzuhur.WAV",
-    "niat_ashar":   "niat-ashar.WAV",
-    "niat_maghrib": "niat-maghrib.WAV",
-    "niat_isya":    "niat-isya.WAV",
     "alfatihah":    "alfatihah.WAV",
     "surat":        "al-ikhlas.WAV",     # Surat/ayat pendek default
 }

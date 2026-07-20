@@ -49,14 +49,15 @@ class SholatStateMachine:
         state saat ini dan rakaat sholat yang aktif.
         """
         if self.current_state == POSE.UNKNOWN:
-            return [POSE.BERDIRI_TEGAK]
-            
+            return [POSE.IQOMAH]
+
+        elif self.current_state == POSE.IQOMAH:
+            return [POSE.TAKBIRATUL_IHRAM]
+
         elif self.current_state == POSE.BERDIRI_TEGAK:
-            if self.rakaat_count == 1:
-                return [POSE.TAKBIRATUL_IHRAM, POSE.BERSEDEKAP]
-            else:
-                return [POSE.BERSEDEKAP, POSE.RUKUK]
-                
+            # Berdiri tegak sebagai state transisi antar rakaat (rakaat 2+)
+            return [POSE.BERSEDEKAP, POSE.RUKUK]
+
         elif self.current_state == POSE.TAKBIRATUL_IHRAM:
             return [POSE.BERSEDEKAP]
             

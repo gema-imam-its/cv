@@ -77,7 +77,7 @@ def get_cpu_temp():
 READING_AUDIOS = {
     "alfatihah.WAV", "al-ikhlas.WAV", "ruku.WAV", "itidal.WAV",
     "sujud.WAV", "iftirasy.WAV", "tasyahud-awal.WAV", "tasyahud-akhir.WAV",
-    "iftitah.WAV", "qunut.WAV", "niat-subuh.WAV"
+    "iftitah.WAV", "qunut.WAV", "iqomah.WAV"
 }
 
 class AudioPlayer:
@@ -429,22 +429,6 @@ class GemaImamApp:
             
         thread = threading.Thread(target=helper, daemon=True)
         thread.start()
-
-    def play_niat_audio(self):
-        """Memutar audio niat sholat yang aktif."""
-        self.audio_player.clear()  # Bersihkan audio sebelumnya
-        if self.active_prayer == "Subuh":
-            self.audio_player.play(AUDIO_EXTRA["niat_subuh"])
-        elif self.active_prayer == "Dhuhur":
-            self.audio_player.play(AUDIO_EXTRA["niat_dzuhur"])
-        elif self.active_prayer == "Ashar":
-            self.audio_player.play(AUDIO_EXTRA["niat_ashar"])
-        elif self.active_prayer == "Maghrib":
-            self.audio_player.play(AUDIO_EXTRA["niat_maghrib"])
-        elif self.active_prayer == "Isya":
-            self.audio_player.play(AUDIO_EXTRA["niat_isya"])
-        else:
-            print(f"[AUDIO] Niat untuk sholat {self.active_prayer} tidak tersedia di folder audio.")
 
     def reset_from_button(self):
         """Callback untuk me-reset state sholat dari tombol GPIO atau keyboard 'r'."""
@@ -1007,24 +991,22 @@ class GemaImamApp:
                                 
                                 from_st = transition_info["from"]
                                 to_st = transition_info["to"]
-                                
-                                # Logika Niat
-                                if to_st == POSE.BERDIRI_TEGAK and from_st == POSE.UNKNOWN:
-                                    self.play_niat_audio()
+
+                                # Putar audio transisi (Takbir Intiqal / Tasmi')
+                                audio_trans = AUDIO_TRANSITION_MAP.get((from_st, to_st))
+                                if audio_trans:
+                                    self.audio_player.play(audio_trans)
+
+                                # Putar audio state yang baru dimasuki
+                                if to_st == POSE.BERSEDEKAP:
+                                    if transition_info["is_first_sedekap"]:
+                                        self.audio_player.play("iftitah.WAV")
+                                    self.audio_player.play("alfatihah.WAV")
+                                    self.audio_player.play("al-ikhlas.WAV")
                                 else:
-                                    audio_trans = AUDIO_TRANSITION_MAP.get((from_st, to_st))
-                                    if audio_trans:
-                                        self.audio_player.play(audio_trans)
-                                        
-                                    if to_st == POSE.BERSEDEKAP:
-                                        if transition_info["is_first_sedekap"]:
-                                            self.audio_player.play("iftitah.WAV")
-                                        self.audio_player.play("alfatihah.WAV")
-                                        self.audio_player.play("al-ikhlas.WAV")
-                                    else:
-                                        audio_state = AUDIO_STATE_MAP.get(to_st)
-                                        if audio_state:
-                                            self.audio_player.play(audio_state)
+                                    audio_state = AUDIO_STATE_MAP.get(to_st)
+                                    if audio_state:
+                                        self.audio_player.play(audio_state)
                                 
                         # Logika Kalibrasi Tinggi Badan
                         if self.calibrating:
@@ -1130,7 +1112,6 @@ class GemaImamApp:
                         if new_prayer != self.active_prayer:
                             self.active_prayer = new_prayer
                             self.state_machine = SholatStateMachine(new_prayer)
-                            self.play_niat_audio()
                             self.start_session_logging()
                 else:
                     if frame_count % 30 == 0:
