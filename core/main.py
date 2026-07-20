@@ -15,7 +15,6 @@ if project_root not in sys.path:
 
 import time
 import json
-import base64
 from datetime import datetime
 import cv2
 import mediapipe as mp
@@ -349,8 +348,11 @@ class GemaImamApp:
         # Sesi yang diminta via Telegram (dict: session_id, student_name, prayer)
         # Diset oleh /mulai command; dikonsumsi dan di-None-kan oleh standby loop
         self._pending_session = None
-        # Penampung gambar transisi gerakan (key: "state_rakaat", value: string base64)
+        # Penampung URL foto evaluasi Cloudinary per gerakan (key: "state_rakaat")
         self._captured_images = {}
+        # Thread upload foto yang sedang berjalan di background — di-join sebentar
+        # saat sesi ditutup supaya foto gerakan terakhir sempat masuk laporan
+        self._upload_threads = []
 
 
         # Deteksi imam tidak terdeteksi
@@ -495,8 +497,16 @@ class GemaImamApp:
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("active") is False and not self.force_stop_session:
-                        print("[WEB LMS] Sesi dibatalkan dari Web LMS (tombol 'Batalkan Sesi').")
-                        self.reset_from_button()
+                        # Jawaban "not active" yang telat bisa juga berarti sesi ini
+                        # BARU SAJA selesai secara alami (sudah dilaporkan "Selesai"),
+                        # bukan berarti dibatalkan dari web — cek dua hal sebelum
+                        # bertindak: (1) ini masih sesi yang sama yang sedang berjalan
+                        # (bukan cek basi untuk sesi lama setelah sesi baru dimulai),
+                        # dan (2) state machine belum mencapai POSE.SELESAI duluan.
+                        if (session_id == self.current_session_id
+                                and self.state_machine.current_state != POSE.SELESAI):
+                            print("[WEB LMS] Sesi dibatalkan dari Web LMS (tombol 'Batalkan Sesi').")
+                            self.reset_from_button()
             except Exception:
                 pass
             finally:
@@ -526,6 +536,33 @@ class GemaImamApp:
                 print(f"[WEB API WARNING] Gagal mengirim laporan sesi. Status: {res.status_code}")
         except Exception as e:
             print(f"[WEB API WARNING] Gagal terhubung ke Web LMS saat menutup sesi: {e}")
+
+    def upload_pose_image(self, jpeg_bytes, img_key):
+        """Unggah satu foto evaluasi (JPEG) ke Cloudinary lewat Web LMS.
+        Dipanggil di background thread (lihat pemanggilnya) supaya tidak
+        memblokir loop pemrosesan frame menunggu upload selesai. URL yang
+        didapat disimpan ke self._captured_images; kalau gagal, foto itu
+        cuma jadi None di laporan akhir — bukan alasan sesi gagal total."""
+        if not WEB_LMS_URL:
+            return
+
+        url = f"{WEB_LMS_URL.rstrip('/')}/api/iot/media/upload"
+        headers = {"x-api-key": WEB_LMS_API_KEY}
+        try:
+            res = requests.post(
+                url,
+                headers=headers,
+                files={"file": (f"{img_key}.jpg", jpeg_bytes, "image/jpeg")},
+                timeout=8,
+            )
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("success") and data.get("url"):
+                    self._captured_images[img_key] = data["url"]
+                    return
+            print(f"[MEDIA UPLOAD WARNING] Gagal unggah foto '{img_key}': HTTP {res.status_code}")
+        except Exception as e:
+            print(f"[MEDIA UPLOAD WARNING] Gagal unggah foto '{img_key}': {e}")
 
     def show_standby_frame(self):
         """Membuat dan menampilkan frame standby yang estetik di layar."""
@@ -628,31 +665,44 @@ class GemaImamApp:
         status_str = "Dibatalkan" if force_cancel else "Selesai"
         duration = (datetime.now() - self.start_timestamp).total_seconds()
         
-        # APPEND CURRENT ACTIVE STATE SO IT IS NOT LOST
+        # Tutup entry gerakan terakhir yang masih terbuka (belum ada exit_time)
+        # supaya datanya tidak hilang — TANPA menduplikasi entry yang sudah dibuat
+        # oleh _commit_transition() saat gerakan ini dimulai. (Kode lama selalu
+        # menambah entry BARU di sini, jadi gerakan yang lagi berjalan saat sesi
+        # berakhir — dibatalkan ataupun selesai wajar — selalu tercatat dua kali,
+        # salah satunya dengan entry_time palsu "00:00:00".)
         if self.state_machine.current_state != POSE.UNKNOWN:
-            duration_last = 0
-            if getattr(self.state_machine, 'state_start_time', None):
-                duration_last = time.time() - self.state_machine.state_start_time
-            
-            entry_t = getattr(self.state_machine, 'state_start_time_str', "00:00:00")
-            if entry_t == "-":
-                entry_t = "00:00:00"
-                
-            self.state_machine.completed_steps.append({
-                "rakaat": self.state_machine.rakaat_count,
-                "state": self.state_machine.current_state,
-                "entry_time": entry_t,
-                "exit_time": time.strftime("%H:%M:%S") if not force_cancel else "Batal",
-                "duration_seconds": round(duration_last, 2),
-                "tumaninah_met": False, 
-                "bacaan_terpotong": None,
-                "gerakan_menyimpang": getattr(self.state_machine, 'current_state_deviations', []),
-                "hip_angle": None,
-                "knee_angle": None,
-                "arm_angle": None,
-                "wrist_dist_x": None,
-                "head_offset_x": None
-            })
+            steps = self.state_machine.completed_steps
+            last_step = steps[-1] if steps else None
+
+            if (last_step
+                    and last_step.get("state") == self.state_machine.current_state
+                    and last_step.get("exit_time") is None):
+                # Entry gerakan ini sudah ada — cukup lengkapi exit_time & durasinya.
+                duration_last = 0.0
+                if self.state_machine.state_start_time is not None:
+                    duration_last = time.time() - self.state_machine.state_start_time
+                last_step["exit_time"] = time.strftime("%H:%M:%S") if not force_cancel else "Batal"
+                last_step["duration_seconds"] = round(duration_last, 2)
+            else:
+                # Fallback langka: belum ada entry untuk state ini sama sekali —
+                # catat seadanya supaya datanya tidak hilang.
+                self.state_machine.completed_steps.append({
+                    "rakaat": self.state_machine.rakaat_count,
+                    "state": self.state_machine.current_state,
+                    "entry_time": "00:00:00",
+                    "exit_time": time.strftime("%H:%M:%S") if not force_cancel else "Batal",
+                    "duration_seconds": None,
+                    "tumaninah_met": None,
+                    "bacaan_terpotong": None,
+                    "gerakan_menyimpang": [],
+                    "hip_angle": None,
+                    "knee_angle": None,
+                    "arm_angle": None,
+                    "wrist_dist_x": None,
+                    "head_offset_x": None
+                })
+
             self.state_machine.current_state = POSE.UNKNOWN
 
         # Hitung statistik tuma'ninah
@@ -666,10 +716,23 @@ class GemaImamApp:
                     
         tumaninah_score = (total_tumaninah_success / total_tumaninah_check * 100.0) if total_tumaninah_check > 0 else 100.0
         
-        # Sematkan foto evaluasi (Base64) ke setiap langkah gerakan transisi
+        # Tunggu upload foto yang masih berjalan (maks ~3 detik total) supaya foto
+        # dari gerakan-gerakan terakhir sempat masuk sebelum laporan dikirim —
+        # upload jalan di background thread, jadi tidak semuanya pasti selesai
+        # tepat saat sesi berakhir.
+        if self._upload_threads:
+            deadline = time.time() + 3.0
+            for t in self._upload_threads:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                t.join(timeout=remaining)
+            self._upload_threads = []
+
+        # Sematkan URL foto evaluasi (Cloudinary) ke setiap langkah gerakan transisi
         for step in self.state_machine.completed_steps:
             img_key = f"{step.get('state')}_{step.get('rakaat')}"
-            step["image_base64"] = self._captured_images.get(img_key, None)
+            step["foto_pose_url"] = self._captured_images.get(img_key, None)
 
         # Simpan JSON (Ringkasan + Detail Lengkap)
         json_filename = os.path.join(LOGS_DIR, f"sholat_{self.active_prayer}_{timestamp_str}.json")
@@ -822,6 +885,7 @@ class GemaImamApp:
         # Reset state machine untuk sesi sholat baru
         self.state_machine.reset()
         self._captured_images = {}
+        self._upload_threads = []
         self.audio_player.clear()
         self.imam_mistakes_count = 0
         
@@ -938,7 +1002,9 @@ class GemaImamApp:
                                 from_st = transition_info["from"]
                                 to_st = transition_info["to"]
 
-                                # 📸 Capture gambar evaluasi (dengan visualisasi skeleton)
+                                # 📸 Capture gambar evaluasi (dengan visualisasi skeleton), lalu
+                                # unggah ke Cloudinary di background thread — non-blocking supaya
+                                # loop pemrosesan frame tidak nge-lag menunggu upload selesai.
                                 try:
                                     # Copy frame agar gambar HUD asli tidak terganggu
                                     eval_frame = frame.copy()
@@ -947,21 +1013,23 @@ class GemaImamApp:
                                         visualizer.draw_skeleton(eval_frame, last_results.pose_landmarks)
                                         if last_features:
                                             visualizer.draw_debug_angles(eval_frame, last_results.pose_landmarks, last_features)
-                                    
-                                    # Perkecil resolusi ke 320x240 agar ukuran payload hemat & cepat dikirim
+
+                                    # Perkecil resolusi ke 320x240 agar upload hemat & cepat
                                     eval_frame_resized = cv2.resize(eval_frame, (320, 240))
-                                    
+
                                     # Compress ke format JPEG dengan kualitas 60% (~6-10 KB per gambar)
                                     success, encoded_img = cv2.imencode('.jpg', eval_frame_resized, [cv2.IMWRITE_JPEG_QUALITY, 60])
                                     if success:
-                                        # Ubah binary JPEG ke format string Base64 Data URL
-                                        base64_str = base64.b64encode(encoded_img).decode('utf-8')
-                                        img_data_url = f"data:image/jpeg;base64,{base64_str}"
-                                        
                                         # Simpan di memory dengan key format "state_rakaat"
                                         img_key = f"{to_st}_{self.state_machine.rakaat_count}"
-                                        self._captured_images[img_key] = img_data_url
-                                        print(f"[EVALUASI IMAGE] Captured: {img_key} (Size: {len(img_data_url)} chars)")
+                                        upload_thread = threading.Thread(
+                                            target=self.upload_pose_image,
+                                            args=(encoded_img.tobytes(), img_key),
+                                            daemon=True,
+                                            name=f"PoseUpload-{img_key}",
+                                        )
+                                        self._upload_threads.append(upload_thread)
+                                        upload_thread.start()
                                 except Exception as img_err:
                                     print(f"[WARNING] Gagal mengambil gambar evaluasi: {img_err}")
 
