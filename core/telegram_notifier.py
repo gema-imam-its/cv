@@ -266,8 +266,9 @@ class TelegramCommandListener:
 
     Command yang didukung:
       /help              - Tampilkan daftar perintah
+      /mulai [sholat] [nama] - Mulai sesi tracking (tanpa Web LMS)
       /status            - Status sholat saat ini
-      /reset             - Reset state machine (mulai ulang sholat)
+      /reset             - Hentikan/reset sesi yang berjalan
       /pause             - Pause / resume deteksi
       /sholat <nama>     - Ganti sholat (subuh/dhuhur/ashar/maghrib/isya)
       /log               - Kirim file log JSON sesi terakhir
@@ -381,6 +382,8 @@ class TelegramCommandListener:
 
         if command == "/help":
             self._cmd_help()
+        elif command == "/mulai":
+            self._cmd_mulai(args)
         elif command == "/status":
             self._cmd_status()
         elif command == "/reset":
@@ -410,22 +413,30 @@ class TelegramCommandListener:
 
     def _cmd_help(self):
         msg = (
-            "GEMA Imam - Daftar Perintah Bot\n"
-            "--------------------------------\n"
-            "`/status`            - Status sholat saat ini\n"
-            "`/reset`             - Reset & mulai ulang sholat\n"
-            "`/pause`             - Pause / resume deteksi\n"
-            "`/sholat <nama>`     - Ganti sholat aktif\n"
-            "  Contoh: `/sholat subuh`\n"
+            "🕌 *GEMA Imam — Daftar Perintah Bot*\n"
+            "\n"
+            "*── Sesi Praktik ──*\n"
+            "`/mulai [sholat] [nama]` — Mulai sesi tracking\n"
+            "  Contoh: `/mulai subuh Ahmad`\n"
+            "  Tanpa argumen: pakai sholat & nama default\n"
+            "`/reset`               — Hentikan/reset sesi yang berjalan\n"
+            "`/status`              — Status sholat saat ini\n"
+            "\n"
+            "*── Kontrol Sholat ──*\n"
+            "`/pause`               — Pause / resume deteksi\n"
+            "`/sholat <nama>`       — Ganti sholat aktif\n"
             "  Pilihan: subuh, dhuhur, ashar, maghrib, isya\n"
-            "`/bt <MAC_ADDRESS>`  - Ganti speaker Bluetooth saat runtime\n"
+            "\n"
+            "*── Audio & Hardware ──*\n"
+            "`/bt <MAC_ADDRESS>`    — Ganti speaker Bluetooth\n"
             "  Contoh: `/bt B8:F6:53:XX:XX:XX`\n"
-            "`/audio <mode>`      - Ganti output audio\n"
-            "  `/audio jack`      - Output ke speaker kabel (3.5mm/HDMI/USB)\n"
-            "  `/audio bt`        - Output ke speaker Bluetooth\n"
-            "  `/audio list`      - Tampilkan semua sink yang tersedia\n"
-            "`/log`               - Kirim file log sesi terakhir\n"
-            "`/help`              - Tampilkan pesan ini"
+            "`/audio jack`          — Output ke speaker kabel (3.5mm/HDMI)\n"
+            "`/audio bt`            — Output ke speaker Bluetooth\n"
+            "`/audio list`          — Lihat semua sink audio\n"
+            "\n"
+            "*── Log & Info ──*\n"
+            "`/log`                 — Kirim file log sesi terakhir\n"
+            "`/help`                — Tampilkan pesan ini"
         )
         self._reply(msg)
 
@@ -437,6 +448,7 @@ class TelegramCommandListener:
             "UNKNOWN": "Tidak Terdeteksi",
             "BERDIRI_TEGAK": "Berdiri Tegak",
             "TAKBIRATUL_IHRAM": "Takbiratul Ihram",
+            "IQOMAH": "Iqomah",
             "BERSEDEKAP": "Bersedekap",
             "RUKUK": "Rukuk",
             "ITIDAL": "I'tidal",
@@ -450,31 +462,62 @@ class TelegramCommandListener:
             "SELESAI": "Selesai",
         }
         current = state_display.get(sm.current_state, sm.current_state)
-        paused_str = "PAUSED" if app.paused else "Berjalan"
-        session_str = "Sudah dimulai" if app.start_timestamp else "Belum dimulai"
+        paused_str = "⏸ PAUSED" if app.paused else "▶️ Berjalan"
+
+        if app.start_timestamp:
+            session_str = f"Aktif (ID: `{app.current_session_id or '-'}`)"
+            student_str = app.current_student_name or "—"
+        elif app._pending_session:
+            session_str = "⏳ Menunggu dimulai..."
+            student_str = app._pending_session.get("student_name", "—")
+        else:
+            session_str = "Standby (belum ada sesi)"
+            student_str = "—"
 
         msg = (
-            "Status GEMA Imam\n"
-            "-----------------\n"
-            f"Sholat  : {app.active_prayer}\n"
-            f"Rakaat  : {sm.rakaat_count} / {sm.total_rakaats}\n"
-            f"Gerakan : {current}\n"
-            f"Status  : {paused_str}\n"
-            f"Sesi    : {session_str}\n"
-            f"Kesalahan: {app.imam_mistakes_count} kali"
+            "🕌 *Status GEMA Imam*\n"
+            "─────────────────────\n"
+            f"👤 Siswa   : {student_str}\n"
+            f"🕌 Sholat  : *{app.active_prayer}*\n"
+            f"🔢 Rakaat  : {sm.rakaat_count} / {sm.total_rakaats}\n"
+            f"🤸 Gerakan : {current}\n"
+            f"⚙️ Status  : {paused_str}\n"
+            f"📋 Sesi    : {session_str}\n"
+            f"❌ Kesalahan: {app.imam_mistakes_count} kali"
         )
         self._reply(msg)
 
     def _cmd_reset(self):
+        """Hentikan sesi aktif / batalkan pending session / reset state machine."""
         app = self._app
-        
+
+        # Batalkan pending session yang belum sempat diproses
+        if app._pending_session is not None:
+            app._pending_session = None
+            self._reply("✅ Permintaan sesi dibatalkan sebelum dimulai.")
+            print("[TELEGRAM CMD] /reset → Pending session dibatalkan.")
+            return
+
+        # Cek apakah ada sesi aktif SEBELUM reset (reset_from_button akan set start_timestamp = None)
+        had_active_session = app.start_timestamp is not None
+
+        # Hentikan & reset sesi yang sedang berjalan
         app.reset_from_button()
-        
-        self._reply(
-            f"🔄 Sholat {app.active_prayer} berhasil di-reset!\n"
-            "Log sesi sebelumnya telah disimpan. Silakan mulai kembali dari awal."
-        )
-        print("[TELEGRAM CMD] Reset sholat & auto-logging dieksekusi dari Telegram.")
+
+        if had_active_session:
+            # Ada sesi aktif — laporan akan dikirim otomatis setelah tracking berhenti
+            self._reply(
+                f"🛑 Sesi *{app.active_prayer}* dihentikan.\n"
+                "Log sesi telah disimpan. Laporan dikirim otomatis setelah diproses.\n\n"
+                "📷 Kamera kembali ke mode standby."
+            )
+        else:
+            # Tidak ada sesi aktif — hanya reset state machine
+            self._reply(
+                f"🔄 State machine di-reset untuk Sholat *{app.active_prayer}*.\n"
+                "Silakan mulai kembali dengan /mulai."
+            )
+        print("[TELEGRAM CMD] /reset dieksekusi dari Telegram.")
 
     def _cmd_pause(self):
         app = self._app
@@ -515,10 +558,65 @@ class TelegramCommandListener:
         app.state_machine = SholatStateMachine(display_name)
 
         self._reply(
-            f"Sholat diganti ke: {display_name}\n"
+            f"Sholat diganti ke: *{display_name}*\n"
             "State machine telah di-reset. Silakan mulai."
         )
         print(f"[TELEGRAM CMD] Sholat diganti ke {display_name}.")
+
+    def _cmd_mulai(self, args):
+        """Mulai sesi tracking langsung dari Telegram tanpa memerlukan Web LMS."""
+        import time
+        app = self._app
+
+        # Cek apakah sesi sedang berjalan (kamera aktif)
+        if app.start_timestamp is not None:
+            self._reply(
+                "⚠️ Sesi sedang berjalan!\n"
+                f"Siswa: *{app.current_student_name or 'Tidak diketahui'}* | Sholat: *{app.active_prayer}*\n\n"
+                "Kirim /selesai untuk menghentikan sesi terlebih dahulu."
+            )
+            return
+
+        # Cek apakah ada pending session yang belum diproses
+        if app._pending_session is not None:
+            self._reply("⏳ Ada permintaan mulai yang masih diproses. Tunggu sebentar...")
+            return
+
+        # Parse argumen: /mulai [sholat] [nama siswa...]
+        prayer_name = app.active_prayer   # default: sholat yang sedang aktif
+        student_name = "Imam (Telegram)"  # default nama
+
+        if args:
+            first = args[0].lower()
+            if first in self.VALID_PRAYERS:
+                prayer_name = self.PRAYER_DISPLAY[first]
+                # Sisa argumen (jika ada) adalah nama siswa
+                if len(args) > 1:
+                    student_name = " ".join(args[1:])
+            else:
+                # Argumen pertama bukan nama sholat → anggap semua sebagai nama siswa
+                student_name = " ".join(args)
+
+        # Buat session_id lokal (TG-<timestamp>)
+        session_id = f"TG-{int(time.time())}"
+
+        # Simpan ke _pending_session; standby loop akan mengambilnya di iterasi berikutnya
+        app._pending_session = {
+            "session_id":   session_id,
+            "student_name": student_name,
+            "prayer":       prayer_name,
+        }
+
+        self._reply(
+            f"✅ Sesi tracking dimulai!\n"
+            f"👤 Siswa  : *{student_name}*\n"
+            f"🕌 Sholat : *{prayer_name}*\n"
+            f"🆔 ID Sesi: `{session_id}`\n\n"
+            "Kamera akan menyala dalam beberapa detik.\n"
+            "Kirim /selesai untuk mengakhiri sesi kapan saja."
+        )
+        print(f"[TELEGRAM CMD] /mulai → Sesi '{session_id}' dijadwalkan untuk {student_name} ({prayer_name}).")
+
 
     def _cmd_log(self):
         """Kirim file log JSON sesi terakhir ke Telegram."""

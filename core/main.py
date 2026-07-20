@@ -346,6 +346,9 @@ class GemaImamApp:
         # (diisi dari .env saat startup, diperbarui saat /bt atau Web LMS request)
         from config import BLUETOOTH_SPEAKER_MAC
         self._last_bt_mac = BLUETOOTH_SPEAKER_MAC or ""
+        # Sesi yang diminta via Telegram (dict: session_id, student_name, prayer)
+        # Diset oleh /mulai command; dikonsumsi dan di-None-kan oleh standby loop
+        self._pending_session = None
 
         # Deteksi imam tidak terdeteksi
         self._no_imam_frames = 0
@@ -1150,7 +1153,34 @@ class GemaImamApp:
         
         try:
             while True:
-                # 1. Tanya Web LMS apakah ada praktikum aktif
+                # 1a. Cek sesi yang diminta via Telegram (/mulai)
+                #     Prioritas lebih tinggi dari Web LMS agar bisa dipakai tanpa koneksi web
+                if self._pending_session:
+                    pending = self._pending_session
+                    self._pending_session = None          # konsumsi, agar tidak loop terus
+
+                    self.current_session_id   = pending["session_id"]
+                    self.current_student_name = pending["student_name"]
+                    # Ganti prayer type sesuai permintaan /mulai
+                    new_prayer = pending.get("prayer", self.active_prayer)
+                    if new_prayer != self.active_prayer:
+                        self.active_prayer = new_prayer
+                        from state_machine import SholatStateMachine
+                        self.state_machine = SholatStateMachine(new_prayer)
+
+                    print(f"[TELEGRAM] Sesi dimulai dari Telegram → Siswa: {self.current_student_name} | Sholat: {self.active_prayer}")
+                    self.run_active_tracking_session()
+
+                    print("\n==================================================")
+                    print(" GEMA IMAM STANDBY MODE ACTIVE")
+                    print(" Menunggu instruksi praktikum dari Web LMS / Telegram...")
+                    print("==================================================\n")
+
+                    self.current_session_id   = None
+                    self.current_student_name = None
+                    continue
+
+                # 1b. Tanya Web LMS apakah ada praktikum aktif
                 status_data = self.check_web_status()
                 
                 if status_data.get("status") == "active":
@@ -1165,7 +1195,7 @@ class GemaImamApp:
                     
                     print("\n==================================================")
                     print(" GEMA IMAM STANDBY MODE ACTIVE")
-                    print(" Menunggu instruksi praktikum dari Web LMS...")
+                    print(" Menunggu instruksi praktikum dari Web LMS / Telegram...")
                     print("==================================================\n")
                     
                     self.current_session_id = None
