@@ -15,6 +15,7 @@ if project_root not in sys.path:
 
 import time
 import json
+import base64
 from datetime import datetime
 import cv2
 import mediapipe as mp
@@ -348,6 +349,9 @@ class GemaImamApp:
         # Sesi yang diminta via Telegram (dict: session_id, student_name, prayer)
         # Diset oleh /mulai command; dikonsumsi dan di-None-kan oleh standby loop
         self._pending_session = None
+        # Penampung gambar transisi gerakan (key: "state_rakaat", value: string base64)
+        self._captured_images = {}
+
 
         # Deteksi imam tidak terdeteksi
         self._no_imam_frames = 0
@@ -662,6 +666,11 @@ class GemaImamApp:
                     
         tumaninah_score = (total_tumaninah_success / total_tumaninah_check * 100.0) if total_tumaninah_check > 0 else 100.0
         
+        # Sematkan foto evaluasi (Base64) ke setiap langkah gerakan transisi
+        for step in self.state_machine.completed_steps:
+            img_key = f"{step.get('state')}_{step.get('rakaat')}"
+            step["image_base64"] = self._captured_images.get(img_key, None)
+
         # Simpan JSON (Ringkasan + Detail Lengkap)
         json_filename = os.path.join(LOGS_DIR, f"sholat_{self.active_prayer}_{timestamp_str}.json")
         tumaninah_score = 0
@@ -812,6 +821,7 @@ class GemaImamApp:
         
         # Reset state machine untuk sesi sholat baru
         self.state_machine.reset()
+        self._captured_images = {}
         self.audio_player.clear()
         self.imam_mistakes_count = 0
         
@@ -927,6 +937,33 @@ class GemaImamApp:
                                 
                                 from_st = transition_info["from"]
                                 to_st = transition_info["to"]
+
+                                # 📸 Capture gambar evaluasi (dengan visualisasi skeleton)
+                                try:
+                                    # Copy frame agar gambar HUD asli tidak terganggu
+                                    eval_frame = frame.copy()
+                                    if last_results and last_results.pose_landmarks:
+                                        # Gambar skeleton pose di atas frame copy
+                                        visualizer.draw_skeleton(eval_frame, last_results.pose_landmarks)
+                                        if last_features:
+                                            visualizer.draw_debug_angles(eval_frame, last_results.pose_landmarks, last_features)
+                                    
+                                    # Perkecil resolusi ke 320x240 agar ukuran payload hemat & cepat dikirim
+                                    eval_frame_resized = cv2.resize(eval_frame, (320, 240))
+                                    
+                                    # Compress ke format JPEG dengan kualitas 60% (~6-10 KB per gambar)
+                                    success, encoded_img = cv2.imencode('.jpg', eval_frame_resized, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                                    if success:
+                                        # Ubah binary JPEG ke format string Base64 Data URL
+                                        base64_str = base64.b64encode(encoded_img).decode('utf-8')
+                                        img_data_url = f"data:image/jpeg;base64,{base64_str}"
+                                        
+                                        # Simpan di memory dengan key format "state_rakaat"
+                                        img_key = f"{to_st}_{self.state_machine.rakaat_count}"
+                                        self._captured_images[img_key] = img_data_url
+                                        print(f"[EVALUASI IMAGE] Captured: {img_key} (Size: {len(img_data_url)} chars)")
+                                except Exception as img_err:
+                                    print(f"[WARNING] Gagal mengambil gambar evaluasi: {img_err}")
 
                                 # Putar audio transisi (Takbir Intiqal / Tasmi')
                                 audio_trans = AUDIO_TRANSITION_MAP.get((from_st, to_st))
