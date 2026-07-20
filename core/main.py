@@ -341,6 +341,10 @@ class GemaImamApp:
         self.force_stop_session = False
         self._last_cancel_check = 0.0
         self._cancel_check_in_flight = False
+        # Deskripsi kegagalan terakhir dari check_web_status() — dipakai supaya
+        # kegagalan yang sama tidak nge-print berulang tiap poll (tiap ~100ms-2s),
+        # tapi tetap kelihatan begitu errornya muncul atau berubah jenis.
+        self._last_status_error = None
         # MAC address speaker Bluetooth yang terakhir berhasil terhubung
         # (diisi dari .env saat startup, diperbarui saat /bt atau Web LMS request)
         from config import BLUETOOTH_SPEAKER_MAC
@@ -454,7 +458,7 @@ class GemaImamApp:
         """Mengecek ke Web LMS apakah ada sesi praktik aktif."""
         if not WEB_LMS_URL:
             return {"status": "idle"}
-            
+
         url = f"{WEB_LMS_URL.rstrip('/')}/api/iot/status"
         headers = {
             "x-api-key": WEB_LMS_API_KEY,
@@ -463,9 +467,23 @@ class GemaImamApp:
         try:
             response = requests.get(url, headers=headers, timeout=1.5)
             if response.status_code == 200:
+                self._last_status_error = None
                 return response.json()
-        except Exception:
-            pass
+
+            # Server menjawab tapi menolak/gagal (mis. 401 API key salah,
+            # 500 error server) — dulu ini ditelan diam-diam dan terlihat
+            # PERSIS SAMA seperti "idle" biasa, jadi tidak ada petunjuk sama
+            # sekali kalau alat tidak pernah berhasil polling dengan benar.
+            error_desc = f"HTTP {response.status_code}: {response.text[:200]}"
+            if error_desc != self._last_status_error:
+                print(f"\n[WEB LMS WARNING] Polling ke {url} gagal — {error_desc}")
+                self._last_status_error = error_desc
+        except Exception as e:
+            error_desc = f"{type(e).__name__}: {e}"
+            if error_desc != self._last_status_error:
+                print(f"\n[WEB LMS WARNING] Tidak bisa menghubungi {url} — {error_desc}")
+                self._last_status_error = error_desc
+
         return {"status": "idle"}
 
     def check_session_cancelled_async(self):
