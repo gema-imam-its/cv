@@ -254,6 +254,51 @@ class ButtonListener:
                 pass
 
 
+class PoseLandmarkSmoother:
+    """
+    Menggunakan Exponential Moving Average (EMA) untuk menyaring/memuluskan landmark pose,
+    guna mereduksi jitter/jumping pada koordinat landmark MediaPipe.
+    """
+    def __init__(self, alpha=0.45):
+        self.alpha = alpha  # Nilai lebih kecil = lebih mulus tapi ada sedikit delay
+        self.prev_landmarks = None
+
+    def reset(self):
+        self.prev_landmarks = None
+
+    def smooth(self, pose_landmarks):
+        if not pose_landmarks:
+            return
+        
+        # Inisialisasi awal jika baru mendeteksi
+        if self.prev_landmarks is None:
+            self.prev_landmarks = []
+            for lm in pose_landmarks.landmark:
+                self.prev_landmarks.append({
+                    "x": lm.x,
+                    "y": lm.y,
+                    "z": lm.z,
+                    "visibility": lm.visibility
+                })
+            return
+
+        # Terapkan EMA pada koordinat x, y, z dan visibilitas landmark
+        for i, lm in enumerate(pose_landmarks.landmark):
+            prev = self.prev_landmarks[i]
+            
+            # EMA formula: S_t = alpha * Y_t + (1 - alpha) * S_{t-1}
+            lm.x = self.alpha * lm.x + (1 - self.alpha) * prev["x"]
+            lm.y = self.alpha * lm.y + (1 - self.alpha) * prev["y"]
+            lm.z = self.alpha * lm.z + (1 - self.alpha) * prev["z"]
+            lm.visibility = self.alpha * lm.visibility + (1 - self.alpha) * prev["visibility"]
+            
+            # Simpan untuk iterasi berikutnya
+            prev["x"] = lm.x
+            prev["y"] = lm.y
+            prev["z"] = lm.z
+            prev["visibility"] = lm.visibility
+
+
 class GemaImamApp:
     def __init__(self):
         self.active_prayer = "Subuh"
@@ -279,6 +324,7 @@ class GemaImamApp:
             min_detection_confidence=ACTIVE_PROFILE["min_detection_conf"],
             min_tracking_confidence=ACTIVE_PROFILE["min_tracking_conf"],
         )
+        self.landmark_smoother = PoseLandmarkSmoother(alpha=0.45)
         
         # Setup Kalibrasi
         self.calibrating = False
@@ -939,6 +985,9 @@ class GemaImamApp:
                     last_results = self.pose_detector.process(img_rgb)
                     
                     if last_results.pose_landmarks:
+                        # Terapkan filter smoothing (EMA) pada landmark
+                        self.landmark_smoother.smooth(last_results.pose_landmarks)
+                        
                         self._no_imam_frames = 0
                         self._no_imam_notified = False
                         
@@ -1004,6 +1053,7 @@ class GemaImamApp:
                                 self.calibration_samples = []
                                 print("[CALIBRATION] Selesai!")
                     else:
+                        self.landmark_smoother.reset()  # Reset agar koordinat tidak lompat ketika orang masuk frame lagi
                         self._no_imam_frames += 1
                         if (self._no_imam_frames >= self._NO_IMAM_ALERT_FRAMES
                                 and not self._no_imam_notified
