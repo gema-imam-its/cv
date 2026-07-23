@@ -907,6 +907,10 @@ class GemaImamApp:
         self.audio_player.clear()
         self.imam_mistakes_count = 0
         
+        # Variabel pelacak waktu selesai audio untuk auto-transition
+        self._audio_completed_timestamp = None
+        self._last_checked_state = None
+        
         print("\n" + "=" * 55)
         print(" GEMA IMAM RUNNING (Praktikum Aktif)")
         print("=" * 55 + "\n")
@@ -1006,7 +1010,45 @@ class GemaImamApp:
                         last_features = get_pose_features(last_results.pose_landmarks)
                         
                         if not self.calibrating:
-                            transition_info = self.state_machine.update(last_classified_pose, last_features)
+                            transition_info = None
+                            
+                            # ── LOGIKA AUTO-TRANSITION SITUASIONAL (3 DETIK SETELAH BACAAN SELESAI) ──
+                            curr_state = self.state_machine.current_state
+                            monitored_states = {
+                                POSE.BERSEDEKAP: POSE.RUKUK,
+                                POSE.ITIDAL: POSE.SUJUD_PERTAMA,
+                                POSE.DUDUK_DI_ANTARA_DUA_SUJUD: POSE.SUJUD_KEDUA
+                            }
+                            
+                            if curr_state in monitored_states:
+                                # Periksa apakah audio playlist di state ini sedang aktif diputar
+                                is_audio_playing = not self.audio_player.queue.empty() or self.audio_player.current_playing_file is not None
+                                
+                                # Reset timer jika baru memasuki state baru
+                                if curr_state != self._last_checked_state:
+                                    self._last_checked_state = curr_state
+                                    self._audio_completed_timestamp = None
+                                
+                                # Catat waktu ketika audio selesai diputar
+                                if not is_audio_playing and self._audio_completed_timestamp is None:
+                                    self._audio_completed_timestamp = time.time()
+                                    print(f"[AUTO-TRANSITION] Playlist audio untuk {curr_state} selesai. Timer 3 detik dimulai...")
+                                
+                                # Jika timer aktif, periksa apakah sudah melebihi 3 detik
+                                if self._audio_completed_timestamp is not None:
+                                    elapsed = time.time() - self._audio_completed_timestamp
+                                    if elapsed >= 3.0:
+                                        target_state = monitored_states[curr_state]
+                                        print(f"[AUTO-TRANSITION] Pose {target_state} belum terdeteksi setelah 3 detik. Memicu transisi otomatis...")
+                                        transition_info = self.state_machine._commit_transition(target_state, last_features)
+                                        # Reset timer
+                                        self._audio_completed_timestamp = None
+                                        self._last_checked_state = None
+                            
+                            # Fallback: Jika tidak terjadi auto-transition, lakukan pencocokan klasifikasi pose normal
+                            if transition_info is None:
+                                transition_info = self.state_machine.update(last_classified_pose, last_features)
+                                
                             if transition_info:
                                 interrupted_files = self.audio_player.clear()
                                 
