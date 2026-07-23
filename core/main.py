@@ -15,6 +15,7 @@ if project_root not in sys.path:
 
 import time
 import json
+import random
 from datetime import datetime
 import cv2
 import mediapipe as mp
@@ -74,7 +75,8 @@ def get_cpu_temp():
 
 # Daftar file audio bacaan sholat yang wajib/sunnah diselesaikan (jika terpotong dianggap kesalahan Imam)
 READING_AUDIOS = {
-    "alfatihah.WAV", "al-ikhlas.WAV", "ruku.WAV", "itidal.WAV",
+    "alfatihah.WAV", "al-ikhlas.WAV", "al-falaq.WAV", "an-nas.WAV", 
+    "al-kautsar.WAV", "an-nasr.WAV", "ruku.WAV", "itidal.WAV",
     "sujud.WAV", "iftirasy.WAV", "tasyahud-awal.WAV", "tasyahud-akhir.WAV",
     "iftitah.WAV", "qunut.WAV", "iqomah.WAV"
 }
@@ -911,6 +913,13 @@ class GemaImamApp:
         self._audio_completed_timestamp = None
         self._last_checked_state = None
         
+        # Buat daftar surat pendek acak untuk sesi sholat ini
+        # Kumpulkan semua surat pendek yang ada di folder audio
+        available_surahs = ["al-ikhlas.WAV", "al-falaq.WAV", "an-nas.WAV", "al-kautsar.WAV", "an-nasr.WAV"]
+        random.shuffle(available_surahs)
+        self._session_surahs = available_surahs
+        print(f"[AUDIO] Surat pendek yang akan dibaca (acak): {self._session_surahs[:2]}")
+        
         print("\n" + "=" * 55)
         print(" GEMA IMAM RUNNING (Praktikum Aktif)")
         print("=" * 55 + "\n")
@@ -1103,7 +1112,19 @@ class GemaImamApp:
                                     if transition_info["is_first_sedekap"]:
                                         self.audio_player.play("iftitah.WAV")
                                     self.audio_player.play("alfatihah.WAV")
-                                    self.audio_player.play("al-ikhlas.WAV")
+                                    
+                                    # Surat pendek hanya dibaca pada rakaat 1 dan rakaat 2
+                                    if self.state_machine.rakaat_count in (1, 2):
+                                        # Ambil surat dari array acak berdasarkan index rakaat (rakaat_count - 1)
+                                        idx = self.state_machine.rakaat_count - 1
+                                        if hasattr(self, '_session_surahs') and idx < len(self._session_surahs):
+                                            surah_to_play = self._session_surahs[idx]
+                                        else:
+                                            surah_to_play = "al-ikhlas.WAV"  # fallback default
+                                        self.audio_player.play(surah_to_play)
+                                        print(f"[AUDIO] Rakaat {self.state_machine.rakaat_count}: Membaca surat pendek '{surah_to_play}'")
+                                    else:
+                                        print(f"[AUDIO] Rakaat {self.state_machine.rakaat_count}: Melewati pembacaan surat pendek (hanya Al-Fatihah)")
                                 else:
                                     audio_state = AUDIO_STATE_MAP.get(to_st)
                                     if audio_state:
