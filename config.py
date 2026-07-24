@@ -32,7 +32,7 @@ HARDWARE_PROFILES = {
         "min_tracking_conf":  0.7,
     },
     "opi4pro": {
-        "model_complexity":  0,      # 0 = Lite (paling ringan untuk ARM CPU)
+        "model_complexity":  1,      # 0 = Lite (paling ringan untuk ARM CPU)
         "camera_index":      0,
         "camera_backend":    "v4l2", # wajib V4L2 di Linux embedded
         "camera_width":      640,
@@ -40,7 +40,7 @@ HARDWARE_PROFILES = {
         "camera_fps":        15,
         "buffer_size":       1,
         "skip_frame":        1,      # proses 1 dari 2 frame (frame skipping)
-        "camera_rotation":   90,   # Rotasi kamera: None, 90, 180, atau 270 (dalam derajat CW)
+        "camera_rotation":   270,   # Rotasi kamera: None, 90, 180, atau 270 (dalam derajat CW)
         "min_detection_conf": 0.6,   # sedikit diturunkan untuk toleransi
         "min_tracking_conf":  0.6,
     },
@@ -100,7 +100,7 @@ THRESHOLDS = {
     # Jumlah frame minimum sebelum pose dikonfirmasi
     # Lebih kecil = lebih responsif, tapi lebih rentan jitter
     # Rekomendasi: 5 (cepat) s/d 10 (stabil). Default: 5
-    "POSE_HOLD_FRAMES":         5,
+    "POSE_HOLD_FRAMES":         7,
 
     # ── Sudut Pinggul (hip_angle) ──────────────────────────
     "HIP_STRAIGHT_MIN":        150,   # berdiri tegak: pinggul > nilai ini
@@ -282,8 +282,8 @@ AUDIO_TRANSITION_MAP = {
     (POSE.DUDUK_DI_ANTARA_DUA_SUJUD, POSE.SUJUD_KEDUA): "takbir.WAV",  # Turun ke Sujud Kedua
     (POSE.SUJUD_KEDUA, POSE.BERSEDEKAP):             "takbir.WAV",    # Bangkit bersedekap ke rakaat berikutnya (rakaat 2+)
     (POSE.SUJUD_KEDUA, POSE.BERDIRI_TEGAK):          "takbir.WAV",    # Bangkit berdiri (fallback)
-    (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AWAL):   "takbir.WAV",    # Duduk tasyahud awal
-    (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AKHIR):  "takbir.WAV",    # Duduk tasyahud akhir
+    (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AWAL):   "takbir-tasyahud.WAV",  # Duduk tasyahud awal
+    (POSE.SUJUD_KEDUA, POSE.DUDUK_TASYAHUD_AKHIR):  "takbir-tasyahud.WAV",  # Duduk tasyahud akhir
     (POSE.DUDUK_TASYAHUD_AWAL, POSE.BERDIRI_TEGAK):  "takbir.WAV",    # Bangkit dari tasyahud awal (fallback berdiri)
     (POSE.DUDUK_TASYAHUD_AWAL, POSE.BERSEDEKAP):     "takbir.WAV",    # Bangkit dari tasyahud awal langsung bersedekap
 
