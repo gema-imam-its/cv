@@ -888,6 +888,7 @@ class GemaImamApp:
             actual_w, actual_h = actual_h, actual_w
             
         print(f"✅ Kamera siap! Resolusi: {actual_w}x{actual_h}")
+        self.audio_player.play("ready.wav")
         
         # Mulai sesi logging
         self.start_session_logging()
@@ -1269,6 +1270,7 @@ class GemaImamApp:
         print(" GEMA IMAM STANDBY MODE ACTIVE")
         print(" Menunggu instruksi praktikum dari Web LMS...")
         print("==================================================\n")
+        self.audio_player.play("standby.wav")
         
         try:
             while True:
@@ -1294,6 +1296,7 @@ class GemaImamApp:
                     print(" GEMA IMAM STANDBY MODE ACTIVE")
                     print(" Menunggu instruksi praktikum dari Web LMS / Telegram...")
                     print("==================================================\n")
+                    self.audio_player.play("standby.wav")
 
                     self.current_session_id   = None
                     self.current_student_name = None
@@ -1316,6 +1319,7 @@ class GemaImamApp:
                     print(" GEMA IMAM STANDBY MODE ACTIVE")
                     print(" Menunggu instruksi praktikum dari Web LMS / Telegram...")
                     print("==================================================\n")
+                    self.audio_player.play("standby.wav")
                     
                     self.current_session_id = None
                     self.current_student_name = None
