@@ -888,7 +888,6 @@ class GemaImamApp:
             actual_w, actual_h = actual_h, actual_w
             
         print(f"✅ Kamera siap! Resolusi: {actual_w}x{actual_h}")
-        self.audio_player.play("ready.wav")
         
         # Mulai sesi logging
         self.start_session_logging()
@@ -908,6 +907,7 @@ class GemaImamApp:
         self._captured_images = {}
         self._upload_threads = []
         self.audio_player.clear()
+        self.audio_player.play("ready.wav")
         self.imam_mistakes_count = 0
         
         # Variabel pelacak waktu selesai audio untuk auto-transition
