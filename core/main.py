@@ -1055,9 +1055,24 @@ class GemaImamApp:
                                         self._audio_completed_timestamp = None
                                         self._last_checked_state = None
                             
+                            # ── LOGIKA HOLD STATE HINGGA BACAAN AUDIO SELESAI ──
+                            hold_audio_states = {
+                                POSE.RUKUK,
+                                POSE.DUDUK_TASYAHUD_AWAL,
+                                POSE.DUDUK_TASYAHUD_AKHIR,
+                                POSE.SALAM_KE_KANAN,
+                                POSE.SALAM_KE_KIRI
+                            }
+                            
+                            is_audio_playing = not self.audio_player.queue.empty() or self.audio_player.current_playing_file is not None
+
                             # Fallback: Jika tidak terjadi auto-transition, lakukan pencocokan klasifikasi pose normal
                             if transition_info is None:
-                                transition_info = self.state_machine.update(last_classified_pose, last_features)
+                                if curr_state in hold_audio_states and is_audio_playing:
+                                    # Audio bacaan masih diputar -> tahan (hold) state saat ini
+                                    transition_info = None
+                                else:
+                                    transition_info = self.state_machine.update(last_classified_pose, last_features)
                                 
                             if transition_info:
                                 interrupted_files = self.audio_player.clear()
