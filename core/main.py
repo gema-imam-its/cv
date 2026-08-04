@@ -57,6 +57,7 @@ from pose_utils import get_coords
 from pose_classifier import classify_pose, get_pose_features
 from state_machine import SholatStateMachine
 import visualizer
+from haptic_notifier import HapticNotifier
 
 # Cek support display GUI
 HAS_DISPLAY = "DISPLAY" in os.environ or os.name == "nt"
@@ -314,6 +315,7 @@ class GemaImamApp:
                 
         self.state_machine = SholatStateMachine(self.active_prayer)
         self.audio_player = AudioPlayer()
+        self.haptic = HapticNotifier()
         self.button_listener = ButtonListener(callback=self.reset_from_button)
         self.debug_mode = False
         self.paused = False
@@ -914,6 +916,9 @@ class GemaImamApp:
         self._audio_completed_timestamp = None
         self._last_checked_state = None
         
+        # Variabel pelacak status audio untuk trigger haptic (modul getar)
+        self._prev_audio_playing = False
+        
         # Buat daftar surat pendek acak untuk sesi sholat ini
         # Kumpulkan semua surat pendek yang ada di folder audio
         available_surahs = ["al-ikhlas.WAV", "al-falaq.WAV", "an-nas.WAV", "al-kautsar.WAV", "an-nasr.WAV"]
@@ -1065,6 +1070,13 @@ class GemaImamApp:
                             }
                             
                             is_audio_playing = not self.audio_player.queue.empty() or self.audio_player.current_playing_file is not None
+
+                            # ── TRIGGER MODUL GETAR: audio selesai secara alami ──
+                            # Jika audio baru saja selesai (True→False) DAN bukan karena
+                            # state transition (clear() paksa) → kirim sinyal getar ke ESP32
+                            if self._prev_audio_playing and not is_audio_playing and transition_info is None:
+                                self.haptic.notify()
+                            self._prev_audio_playing = is_audio_playing
 
                             # Fallback: Jika tidak terjadi auto-transition, lakukan pencocokan klasifikasi pose normal
                             if transition_info is None:
@@ -1368,6 +1380,7 @@ class GemaImamApp:
                         time.sleep(2)
         finally:
             self.button_listener.stop()
+            self.haptic.stop()
             if self.telegram_listener:
                 self.telegram_listener.stop()
             if HAS_DISPLAY:
