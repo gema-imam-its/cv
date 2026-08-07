@@ -49,7 +49,7 @@ class SholatStateMachine:
         state saat ini dan rakaat sholat yang aktif.
         """
         if self.current_state == POSE.UNKNOWN:
-            return [POSE.IQOMAH]
+            return [POSE.IQOMAH, POSE.TAKBIRATUL_IHRAM]
 
         elif self.current_state == POSE.IQOMAH:
             return [POSE.TAKBIRATUL_IHRAM]

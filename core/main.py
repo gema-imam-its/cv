@@ -15,6 +15,7 @@ if project_root not in sys.path:
 
 import time
 import json
+import random
 from datetime import datetime
 import cv2
 import mediapipe as mp
@@ -56,6 +57,7 @@ from pose_utils import get_coords
 from pose_classifier import classify_pose, get_pose_features
 from state_machine import SholatStateMachine
 import visualizer
+from haptic_notifier import HapticNotifier
 
 # Cek support display GUI
 HAS_DISPLAY = "DISPLAY" in os.environ or os.name == "nt"
@@ -74,7 +76,8 @@ def get_cpu_temp():
 
 # Daftar file audio bacaan sholat yang wajib/sunnah diselesaikan (jika terpotong dianggap kesalahan Imam)
 READING_AUDIOS = {
-    "alfatihah.WAV", "al-ikhlas.WAV", "ruku.WAV", "itidal.WAV",
+    "alfatihah.WAV", "al-ikhlas.WAV", "al-falaq.WAV", "an-nas.WAV", 
+    "al-kautsar.WAV", "an-nasr.WAV", "ruku.WAV", "itidal.WAV",
     "sujud.WAV", "iftirasy.WAV", "tasyahud-awal.WAV", "tasyahud-akhir.WAV",
     "iftitah.WAV", "qunut.WAV", "iqomah.WAV"
 }
@@ -312,6 +315,7 @@ class GemaImamApp:
                 
         self.state_machine = SholatStateMachine(self.active_prayer)
         self.audio_player = AudioPlayer()
+        self.haptic = HapticNotifier()
         self.button_listener = ButtonListener(callback=self.reset_from_button)
         self.debug_mode = False
         self.paused = False
@@ -938,9 +942,24 @@ class GemaImamApp:
         self._captured_images = {}
         self._upload_threads = []
         self.audio_player.clear()
+        self.audio_player.play("ready.wav")
         self.imam_mistakes_count = 0
         self._preview_requested = False
         self._last_preview_send = 0.0
+        
+        # Variabel pelacak waktu selesai audio untuk auto-transition
+        self._audio_completed_timestamp = None
+        self._last_checked_state = None
+        
+        # Variabel pelacak status audio untuk trigger haptic (modul getar)
+        self._prev_audio_playing = False
+        
+        # Buat daftar surat pendek acak untuk sesi sholat ini
+        # Kumpulkan semua surat pendek yang ada di folder audio
+        available_surahs = ["al-ikhlas.WAV", "al-falaq.WAV", "an-nas.WAV", "al-kautsar.WAV", "an-nasr.WAV"]
+        random.shuffle(available_surahs)
+        self._session_surahs = available_surahs
+        print(f"[AUDIO] Surat pendek yang akan dibaca (acak): {self._session_surahs[:2]}")
         
         print("\n" + "=" * 55)
         print(" GEMA IMAM RUNNING (Praktikum Aktif)")
@@ -1066,7 +1085,67 @@ class GemaImamApp:
                         last_features = get_pose_features(last_results.pose_landmarks)
                         
                         if not self.calibrating:
-                            transition_info = self.state_machine.update(last_classified_pose, last_features)
+                            transition_info = None
+                            
+                            # ── LOGIKA AUTO-TRANSITION SITUASIONAL (3 DETIK SETELAH BACAAN SELESAI) ──
+                            curr_state = self.state_machine.current_state
+                            monitored_states = {
+                                POSE.BERSEDEKAP: POSE.RUKUK,
+                                POSE.ITIDAL: POSE.SUJUD_PERTAMA,
+                                POSE.DUDUK_DI_ANTARA_DUA_SUJUD: POSE.SUJUD_KEDUA
+                            }
+                            
+                            if curr_state in monitored_states:
+                                # Periksa apakah audio playlist di state ini sedang aktif diputar
+                                is_audio_playing = not self.audio_player.queue.empty() or self.audio_player.current_playing_file is not None
+                                
+                                # Reset timer jika baru memasuki state baru
+                                if curr_state != self._last_checked_state:
+                                    self._last_checked_state = curr_state
+                                    self._audio_completed_timestamp = None
+                                
+                                # Catat waktu ketika audio selesai diputar
+                                if not is_audio_playing and self._audio_completed_timestamp is None:
+                                    self._audio_completed_timestamp = time.time()
+                                    print(f"[AUTO-TRANSITION] Playlist audio untuk {curr_state} selesai. Timer 3 detik dimulai...")
+                                
+                                # Jika timer aktif, periksa apakah sudah melebihi 3 detik
+                                if self._audio_completed_timestamp is not None:
+                                    elapsed = time.time() - self._audio_completed_timestamp
+                                    if elapsed >= 3.0:
+                                        target_state = monitored_states[curr_state]
+                                        print(f"[AUTO-TRANSITION] Pose {target_state} belum terdeteksi setelah 3 detik. Memicu transisi otomatis...")
+                                        transition_info = self.state_machine._commit_transition(target_state, last_features)
+                                        # Reset timer
+                                        self._audio_completed_timestamp = None
+                                        self._last_checked_state = None
+                            
+                            # ── LOGIKA HOLD STATE HINGGA BACAAN AUDIO SELESAI ──
+                            hold_audio_states = {
+                                POSE.RUKUK,
+                                POSE.DUDUK_TASYAHUD_AWAL,
+                                POSE.DUDUK_TASYAHUD_AKHIR,
+                                POSE.SALAM_KE_KANAN,
+                                POSE.SALAM_KE_KIRI
+                            }
+                            
+                            is_audio_playing = not self.audio_player.queue.empty() or self.audio_player.current_playing_file is not None
+
+                            # ── TRIGGER MODUL GETAR: audio selesai secara alami ──
+                            # Jika audio baru saja selesai (True→False) DAN bukan karena
+                            # state transition (clear() paksa) → kirim sinyal getar ke ESP32
+                            if self._prev_audio_playing and not is_audio_playing and transition_info is None:
+                                self.haptic.notify()
+                            self._prev_audio_playing = is_audio_playing
+
+                            # Fallback: Jika tidak terjadi auto-transition, lakukan pencocokan klasifikasi pose normal
+                            if transition_info is None:
+                                if curr_state in hold_audio_states and is_audio_playing:
+                                    # Audio bacaan masih diputar -> tahan (hold) state saat ini
+                                    transition_info = None
+                                else:
+                                    transition_info = self.state_machine.update(last_classified_pose, last_features)
+                                
                             if transition_info:
                                 interrupted_files = self.audio_player.clear()
                                 
@@ -1121,7 +1200,19 @@ class GemaImamApp:
                                     if transition_info["is_first_sedekap"]:
                                         self.audio_player.play("iftitah.WAV")
                                     self.audio_player.play("alfatihah.WAV")
-                                    self.audio_player.play("al-ikhlas.WAV")
+                                    
+                                    # Surat pendek hanya dibaca pada rakaat 1 dan rakaat 2
+                                    if self.state_machine.rakaat_count in (1, 2):
+                                        # Ambil surat dari array acak berdasarkan index rakaat (rakaat_count - 1)
+                                        idx = self.state_machine.rakaat_count - 1
+                                        if hasattr(self, '_session_surahs') and idx < len(self._session_surahs):
+                                            surah_to_play = self._session_surahs[idx]
+                                        else:
+                                            surah_to_play = "al-ikhlas.WAV"  # fallback default
+                                        self.audio_player.play(surah_to_play)
+                                        print(f"[AUDIO] Rakaat {self.state_machine.rakaat_count}: Membaca surat pendek '{surah_to_play}'")
+                                    else:
+                                        print(f"[AUDIO] Rakaat {self.state_machine.rakaat_count}: Melewati pembacaan surat pendek (hanya Al-Fatihah)")
                                 else:
                                     audio_state = AUDIO_STATE_MAP.get(to_st)
                                     if audio_state:
@@ -1266,6 +1357,7 @@ class GemaImamApp:
         print(" GEMA IMAM STANDBY MODE ACTIVE")
         print(" Menunggu instruksi praktikum dari Web LMS...")
         print("==================================================\n")
+        self.audio_player.play("standby.wav")
         
         try:
             while True:
@@ -1291,6 +1383,7 @@ class GemaImamApp:
                     print(" GEMA IMAM STANDBY MODE ACTIVE")
                     print(" Menunggu instruksi praktikum dari Web LMS / Telegram...")
                     print("==================================================\n")
+                    self.audio_player.play("standby.wav")
 
                     self.current_session_id   = None
                     self.current_student_name = None
@@ -1313,6 +1406,7 @@ class GemaImamApp:
                     print(" GEMA IMAM STANDBY MODE ACTIVE")
                     print(" Menunggu instruksi praktikum dari Web LMS / Telegram...")
                     print("==================================================\n")
+                    self.audio_player.play("standby.wav")
                     
                     self.current_session_id = None
                     self.current_student_name = None
@@ -1346,6 +1440,7 @@ class GemaImamApp:
                         time.sleep(2)
         finally:
             self.button_listener.stop()
+            self.haptic.stop()
             if self.telegram_listener:
                 self.telegram_listener.stop()
             if HAS_DISPLAY:
