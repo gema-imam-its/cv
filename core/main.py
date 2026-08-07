@@ -341,6 +341,12 @@ class GemaImamApp:
         self.force_stop_session = False
         self._last_cancel_check = 0.0
         self._cancel_check_in_flight = False
+        # Diisi dari respons check_session_cancelled_async() (field
+        # "preview_requested"), dibaca oleh run_active_tracking_session()
+        # untuk tahu kapan harus mengirim frame pratinjau "Lihat Kamera" ke
+        # Web LMS — lihat send_preview_frame().
+        self._preview_requested = False
+        self._last_preview_send = 0.0
         # Deskripsi kegagalan terakhir dari check_web_status() — dipakai supaya
         # kegagalan yang sama tidak nge-print berulang tiap poll (tiap ~100ms-2s),
         # tapi tetap kelihatan begitu errornya muncul atau berubah jenis.
@@ -514,6 +520,10 @@ class GemaImamApp:
                 )
                 if response.status_code == 200:
                     data = response.json()
+                    # Dibaca oleh run_active_tracking_session() (throttle
+                    # sendiri ~1x/detik di sana) — piggyback di poll ~3
+                    # detik yang sudah ada ini, tidak perlu request baru.
+                    self._preview_requested = bool(data.get("preview_requested", False))
                     if data.get("active") is False and not self.force_stop_session:
                         # Jawaban "not active" yang telat bisa juga berarti sesi ini
                         # BARU SAJA selesai secara alami (sudah dilaporkan "Selesai"),
@@ -581,6 +591,29 @@ class GemaImamApp:
             print(f"[MEDIA UPLOAD WARNING] Gagal unggah foto '{img_key}': HTTP {res.status_code}")
         except Exception as e:
             print(f"[MEDIA UPLOAD WARNING] Gagal unggah foto '{img_key}': {e}")
+
+    def send_preview_frame(self, jpeg_bytes):
+        """Kirim satu frame kamera saat ini ke Web LMS untuk panel "Lihat
+        Kamera" guru — dipanggil di background thread (lihat pemanggilnya
+        di run_active_tracking_session) supaya tidak memblokir loop
+        pemrosesan frame. Ini cuma pratinjau langsung, bukan arsip: tidak
+        disimpan di mana pun di sisi Pi, dan Web LMS sendiri cuma menyimpan
+        frame terakhir di memori (bukan Cloudinary/DB) — gagal kirim cukup
+        dilewati diam-diam, sama seperti upload_pose_image."""
+        if not WEB_LMS_URL:
+            return
+
+        url = f"{WEB_LMS_URL.rstrip('/')}/api/iot/preview/frame"
+        headers = {"x-api-key": WEB_LMS_API_KEY}
+        try:
+            requests.post(
+                url,
+                headers=headers,
+                files={"file": ("preview.jpg", jpeg_bytes, "image/jpeg")},
+                timeout=3,
+            )
+        except Exception:
+            pass
 
     def show_standby_frame(self):
         """Membuat dan menampilkan frame standby yang estetik di layar."""
@@ -906,6 +939,8 @@ class GemaImamApp:
         self._upload_threads = []
         self.audio_player.clear()
         self.imam_mistakes_count = 0
+        self._preview_requested = False
+        self._last_preview_send = 0.0
         
         print("\n" + "=" * 55)
         print(" GEMA IMAM RUNNING (Praktikum Aktif)")
@@ -959,6 +994,31 @@ class GemaImamApp:
                 if now_ts - self._last_cancel_check >= 3.0:
                     self._last_cancel_check = now_ts
                     self.check_session_cancelled_async()
+
+                # Kirim frame pratinjau ke panel "Lihat Kamera" guru di Web
+                # LMS kalau sedang diminta (flag diisi oleh
+                # check_session_cancelled_async() di atas, dari field
+                # "preview_requested" pada respons /api/iot/status yang
+                # sudah dipoll ~3 detik itu juga — tidak ada request baru).
+                # Throttle sendiri ke ~1x/detik supaya tidak ikut membebani
+                # loop pemrosesan frame walau flag-nya true terus.
+                if self._preview_requested and now_ts - self._last_preview_send >= 1.0:
+                    self._last_preview_send = now_ts
+                    try:
+                        h, w = frame.shape[:2]
+                        preview_frame = cv2.resize(frame, (480, int(h * 480 / w))) if w > 480 else frame
+                        success, encoded_preview = cv2.imencode(
+                            '.jpg', preview_frame, [cv2.IMWRITE_JPEG_QUALITY, 60]
+                        )
+                        if success:
+                            threading.Thread(
+                                target=self.send_preview_frame,
+                                args=(encoded_preview.tobytes(),),
+                                daemon=True,
+                                name="PreviewFrameUpload",
+                            ).start()
+                    except Exception as preview_err:
+                        print(f"[WARNING] Gagal menyiapkan frame pratinjau: {preview_err}")
 
                 frame_count += 1
                 
