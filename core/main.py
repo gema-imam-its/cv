@@ -618,22 +618,27 @@ class GemaImamApp:
         di run_active_tracking_session) supaya tidak memblokir loop
         pemrosesan frame. Ini cuma pratinjau langsung, bukan arsip: tidak
         disimpan di mana pun di sisi Pi, dan Web LMS sendiri cuma menyimpan
-        frame terakhir di memori (bukan Cloudinary/DB) — gagal kirim cukup
-        dilewati diam-diam, sama seperti upload_pose_image."""
+        frame terakhir di memori (bukan Cloudinary/DB). Gagal kirim tidak
+        menghentikan sesi (sama seperti upload_pose_image) tapi TETAP
+        dicetak ke console — sebelumnya ini gagal 100% diam-diam, yang
+        membuat masalah pengiriman frame pratinjau mustahil didiagnosis
+        dari sisi Pi."""
         if not WEB_LMS_URL:
             return
 
         url = f"{WEB_LMS_URL.rstrip('/')}/api/iot/preview/frame"
         headers = {"x-api-key": WEB_LMS_API_KEY}
         try:
-            requests.post(
+            res = requests.post(
                 url,
                 headers=headers,
                 files={"file": ("preview.jpg", jpeg_bytes, "image/jpeg")},
                 timeout=3,
             )
-        except Exception:
-            pass
+            if res.status_code != 200:
+                print(f"[PREVIEW UPLOAD WARNING] Gagal kirim frame pratinjau: HTTP {res.status_code}: {res.text[:200]}")
+        except Exception as e:
+            print(f"[PREVIEW UPLOAD WARNING] Gagal kirim frame pratinjau: {e}")
 
     def show_standby_frame(self):
         """Membuat dan menampilkan frame standby yang estetik di layar."""
