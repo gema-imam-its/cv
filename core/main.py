@@ -1035,31 +1035,6 @@ class GemaImamApp:
                     self._last_cancel_check = now_ts
                     self.check_session_cancelled_async()
 
-                # Kirim frame pratinjau ke panel "Lihat Kamera" guru di Web
-                # LMS kalau sedang diminta (flag diisi oleh
-                # check_session_cancelled_async() di atas, dari field
-                # "preview_requested" pada respons /api/iot/status yang
-                # sudah dipoll ~3 detik itu juga — tidak ada request baru).
-                # Throttle sendiri ke ~1x/detik supaya tidak ikut membebani
-                # loop pemrosesan frame walau flag-nya true terus.
-                if self._preview_requested and now_ts - self._last_preview_send >= 1.0:
-                    self._last_preview_send = now_ts
-                    try:
-                        h, w = frame.shape[:2]
-                        preview_frame = cv2.resize(frame, (480, int(h * 480 / w))) if w > 480 else frame
-                        success, encoded_preview = cv2.imencode(
-                            '.jpg', preview_frame, [cv2.IMWRITE_JPEG_QUALITY, 60]
-                        )
-                        if success:
-                            threading.Thread(
-                                target=self.send_preview_frame,
-                                args=(encoded_preview.tobytes(),),
-                                daemon=True,
-                                name="PreviewFrameUpload",
-                            ).start()
-                    except Exception as preview_err:
-                        print(f"[WARNING] Gagal menyiapkan frame pratinjau: {preview_err}")
-
                 frame_count += 1
                 
                 # Baca suhu CPU setiap 150 frame
@@ -1087,7 +1062,38 @@ class GemaImamApp:
                 
                 # Mirror frame
                 frame = cv2.flip(frame, 1)
-                
+
+                # Kirim frame pratinjau ke panel "Lihat Kamera" guru di Web
+                # LMS kalau sedang diminta (flag diisi oleh
+                # check_session_cancelled_async() di atas, dari field
+                # "preview_requested" pada respons /api/iot/status yang
+                # sudah dipoll ~3 detik itu juga — tidak ada request baru).
+                # Throttle sendiri ke ~1x/detik supaya tidak ikut membebani
+                # loop pemrosesan frame walau flag-nya true terus. Diambil
+                # DI SINI, setelah rotasi+mirror di atas — sebelumnya ini
+                # ada sebelum baris rotasi, jadi preview di web selalu
+                # menampilkan frame mentah kamera (miring 90 derajat sesuai
+                # pemasangan fisik), sementara HUD lokal dan deteksi pose
+                # sudah benar karena keduanya memakai `frame` yang sudah
+                # dikoreksi di sini.
+                if self._preview_requested and now_ts - self._last_preview_send >= 1.0:
+                    self._last_preview_send = now_ts
+                    try:
+                        h, w = frame.shape[:2]
+                        preview_frame = cv2.resize(frame, (480, int(h * 480 / w))) if w > 480 else frame
+                        success, encoded_preview = cv2.imencode(
+                            '.jpg', preview_frame, [cv2.IMWRITE_JPEG_QUALITY, 60]
+                        )
+                        if success:
+                            threading.Thread(
+                                target=self.send_preview_frame,
+                                args=(encoded_preview.tobytes(),),
+                                daemon=True,
+                                name="PreviewFrameUpload",
+                            ).start()
+                    except Exception as preview_err:
+                        print(f"[WARNING] Gagal menyiapkan frame pratinjau: {preview_err}")
+
                 # Frame skipping logic
                 should_process = (frame_count % (skip_frame_rate + 1)) == 0
                 
