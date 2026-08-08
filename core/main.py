@@ -345,6 +345,13 @@ class GemaImamApp:
         self.force_stop_session = False
         self._last_cancel_check = 0.0
         self._cancel_check_in_flight = False
+        # Deskripsi kegagalan terakhir dari check_session_cancelled_async() —
+        # fungsi itu sebelumnya menelan semua Exception diam-diam (termasuk
+        # kegagalan jaringan), jadi kalau pollingnya berhenti berhasil di
+        # tengah sesi (mis. preview_requested tidak ter-update lagi), tidak
+        # ada petunjuk sama sekali di console. Sama seperti pola
+        # _last_status_error di check_web_status().
+        self._last_cancel_check_error = None
         # Diisi dari respons check_session_cancelled_async() (field
         # "preview_requested"), dibaca oleh run_active_tracking_session()
         # untuk tahu kapan harus mengirim frame pratinjau "Lihat Kamera" ke
@@ -523,6 +530,7 @@ class GemaImamApp:
                     url, headers=headers, params={"session_id": session_id}, timeout=3
                 )
                 if response.status_code == 200:
+                    self._last_cancel_check_error = None
                     data = response.json()
                     # Dibaca oleh run_active_tracking_session() (throttle
                     # sendiri ~1x/detik di sana) — piggyback di poll ~3
@@ -539,8 +547,16 @@ class GemaImamApp:
                                 and self.state_machine.current_state != POSE.SELESAI):
                             print("[WEB LMS] Sesi dibatalkan dari Web LMS (tombol 'Batalkan Sesi').")
                             self.reset_from_button()
-            except Exception:
-                pass
+                else:
+                    error_desc = f"HTTP {response.status_code}: {response.text[:200]}"
+                    if error_desc != self._last_cancel_check_error:
+                        print(f"\n[WEB LMS WARNING] Cek status sesi (poll ~3 detik) gagal — {error_desc}")
+                        self._last_cancel_check_error = error_desc
+            except Exception as e:
+                error_desc = f"{type(e).__name__}: {e}"
+                if error_desc != self._last_cancel_check_error:
+                    print(f"\n[WEB LMS WARNING] Tidak bisa cek status sesi (poll ~3 detik) — {error_desc}")
+                    self._last_cancel_check_error = error_desc
             finally:
                 self._cancel_check_in_flight = False
 
