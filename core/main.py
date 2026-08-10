@@ -1119,7 +1119,9 @@ class GemaImamApp:
                             monitored_states = {
                                 POSE.BERSEDEKAP: POSE.RUKUK,
                                 POSE.ITIDAL: POSE.SUJUD_PERTAMA,
-                                POSE.DUDUK_DI_ANTARA_DUA_SUJUD: POSE.SUJUD_KEDUA
+                                POSE.DUDUK_DI_ANTARA_DUA_SUJUD: POSE.SUJUD_KEDUA,
+                                POSE.DUDUK_TASYAHUD_AKHIR: POSE.SALAM_KE_KANAN,
+                                POSE.SALAM_KE_KANAN: POSE.SALAM_KE_KIRI,
                             }
                             
                             if curr_state in monitored_states:
