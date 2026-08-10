@@ -369,13 +369,13 @@ class TelegramCommandListener:
         if chat_id != str(self._chat_id):
             return
 
-        text = (message.get("text") or "").strip().lower()
+        text = (message.get("text") or "").strip()
         if not text.startswith("/"):
             return
 
-        # Parse command dan argumen
+        # Parse command dan argumen (command lowercase, args pertahankan case asli untuk SSID/Password)
         parts = text.split()
-        command = parts[0]
+        command = parts[0].lower()
         args = parts[1:]
 
         print(f"[TELEGRAM CMD] Perintah diterima: {text}")
@@ -398,6 +398,8 @@ class TelegramCommandListener:
             self._cmd_bt(args)
         elif command == "/audio":
             self._cmd_audio(args)
+        elif command == "/wifi":
+            self._cmd_wifi(args)
         else:
             self._reply(
                 f"Perintah `{command}` tidak dikenal.\n\nKetik /help untuk melihat daftar perintah."
@@ -427,12 +429,14 @@ class TelegramCommandListener:
             "`/sholat <nama>`       — Ganti sholat aktif\n"
             "  Pilihan: subuh, dhuhur, ashar, maghrib, isya\n"
             "\n"
-            "*── Audio & Hardware ──*\n"
+            "*── Audio & Network ──*\n"
             "`/bt <MAC_ADDRESS>`    — Ganti speaker Bluetooth\n"
             "  Contoh: `/bt B8:F6:53:XX:XX:XX`\n"
             "`/audio jack`          — Output ke speaker kabel (3.5mm/HDMI)\n"
             "`/audio bt`            — Output ke speaker Bluetooth\n"
             "`/audio list`          — Lihat semua sink audio\n"
+            "`/wifi`                — Pindai jaringan WiFi terdekat\n"
+            "`/wifi <SSID> <PASS>`  — Hubungkan Orange Pi ke WiFi baru\n"
             "\n"
             "*── Log & Info ──*\n"
             "`/log`                 — Kirim file log sesi terakhir\n"
@@ -744,3 +748,82 @@ class TelegramCommandListener:
 
         import threading
         threading.Thread(target=_do_switch, daemon=True, name="AudioSwitch").start()
+
+    def _cmd_wifi(self, args):
+        """Ganti koneksi WiFi Orange Pi 4 Pro atau scan WiFi terdekat."""
+        import subprocess
+        import threading
+
+        if not args or args[0].lower() in ("scan", "list"):
+            self._reply("🔍 Memindai jaringan WiFi terdekat di sekitar Orange Pi...")
+
+            def _do_scan():
+                try:
+                    res = subprocess.run(
+                        ["nmcli", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list", "--rescan", "yes"],
+                        capture_output=True, text=True, timeout=12
+                    )
+                    output = res.stdout.strip()
+                    if not output:
+                        self._reply("Tidak ada jaringan WiFi yang ditemukan.")
+                        return
+
+                    lines = output.splitlines()
+                    rows = lines[1:11]  # ambil maksimal 10 WiFi terkuat
+
+                    formatted = ["📶 *Daftar WiFi Terdekat:*"]
+                    for row in rows:
+                        row_str = row.strip()
+                        if row_str:
+                            formatted.append(f"• `{row_str}`")
+
+                    formatted.append("\n💡 *Cara terhubung:*")
+                    formatted.append("`/wifi NamaWiFi PasswordWiFi`")
+                    self._reply("\n".join(formatted))
+                except FileNotFoundError:
+                    self._reply("⚠️ `nmcli` (NetworkManager) tidak ditemukan di Orange Pi.")
+                except Exception as e:
+                    self._reply(f"⚠️ Gagal memindai WiFi: `{e}`")
+
+            threading.Thread(target=_do_scan, daemon=True, name="WifiScan").start()
+            return
+
+        # Format: /wifi <SSID> [PASSWORD]
+        ssid = args[0]
+        password = " ".join(args[1:]) if len(args) > 1 else ""
+
+        if password:
+            self._reply(f"🔄 Menghubungkan ke WiFi *{ssid}*...")
+        else:
+            self._reply(f"🔄 Menghubungkan ke WiFi *{ssid}* (tanpa password)...")
+
+        def _do_connect(s=ssid, p=password):
+            try:
+                cmd = ["nmcli", "dev", "wifi", "connect", s]
+                if p:
+                    cmd.extend(["password", p])
+
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
+                if res.returncode == 0:
+                    self._reply(
+                        f"✅ *Berhasil Terhubung ke WiFi!*\n"
+                        f"SSID: *{s}*\n"
+                        "Orange Pi sekarang aktif di jaringan baru."
+                    )
+                    print(f"[TELEGRAM CMD] Berhasil terhubung ke WiFi {s}")
+                else:
+                    err_msg = res.stderr.strip() or res.stdout.strip()
+                    self._reply(
+                        f"❌ *Gagal Terhubung ke WiFi {s}*\n"
+                        f"Detail: `{err_msg}`\n\n"
+                        "Periksa kembali SSID dan Password."
+                    )
+            except subprocess.TimeoutExpired:
+                self._reply(
+                    f"⚠️ *Waktu Sambung Habis (Timeout)* saat mencoba terhubung ke `{s}`.\n"
+                    "Orange Pi mungkin otomatis kembali ke WiFi sebelumnya."
+                )
+            except Exception as e:
+                self._reply(f"⚠️ Gagal mengeksekusi koneksi WiFi: `{e}`")
+
+        threading.Thread(target=_do_connect, daemon=True, name="WifiConnect").start()
