@@ -382,14 +382,16 @@ class TelegramCommandListener:
 
         if command == "/help":
             self._cmd_help()
-        elif command == "/mulai":
+        elif command in ("/mulai", "/start"):
             self._cmd_mulai(args)
         elif command == "/status":
             self._cmd_status()
-        elif command == "/reset":
+        elif command in ("/reset", "/selesai", "/stop"):
             self._cmd_reset()
         elif command == "/pause":
             self._cmd_pause()
+        elif command in ("/getar", "/testgetar"):
+            self._cmd_getar()
         elif command == "/sholat":
             self._cmd_sholat(args)
         elif command == "/log":
@@ -424,7 +426,8 @@ class TelegramCommandListener:
             "`/reset`               — Hentikan/reset sesi yang berjalan\n"
             "`/status`              — Status sholat saat ini\n"
             "\n"
-            "*── Kontrol Sholat ──*\n"
+            "*── Kontrol Sholat & Modul Getar ──*\n"
+            "`/getar`               — Tes getarkan gelang ESP32\n"
             "`/pause`               — Pause / resume deteksi\n"
             "`/sholat <nama>`       — Ganti sholat aktif\n"
             "  Pilihan: subuh, dhuhur, ashar, maghrib, isya\n"
@@ -531,6 +534,20 @@ class TelegramCommandListener:
         else:
             self._reply("Deteksi dilanjutkan (RESUMED).")
         print(f"[TELEGRAM CMD] Paused = {app.paused}")
+
+    def _cmd_getar(self):
+        """Kirim sinyal tes getaran (UDP packet) ke modul ESP32."""
+        app = self._app
+        if hasattr(app, "haptic") and app.haptic:
+            app.haptic.notify()
+            self._reply(
+                "📳 *Sinyal Tes Getar Terkirim!*\n"
+                "Paket UDP 'DONE' telah di-broadcast.\n"
+                "Jika gelang ESP32 terhubung di jaringan yang sama, motor akan bergetar 300ms."
+            )
+            print("[TELEGRAM CMD] /getar dieksekusi.")
+        else:
+            self._reply("⚠️ Modul haptic notifier tidak aktif.")
 
     def _cmd_sholat(self, args):
         if not args:
