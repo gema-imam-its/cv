@@ -1,19 +1,8 @@
-"""
-============================================================
-GEMA Imam — Sholat Movement Tracking
-haptic_notifier.py — Kirim sinyal UDP ke modul getar ESP32
-============================================================
-
-Mengirim satu UDP packet ke ESP32 saat audio bacaan state
-sholat selesai diputar — sebagai feedback taktil untuk imam.
-
-Tidak perlu install library tambahan (pakai socket bawaan Python).
-Silent fail jika ESP32 tidak terhubung — tidak mengganggu program utama.
-"""
-
 import socket
 import os
 import subprocess
+import threading
+import time
 
 HAPTIC_PORT = 9999
 
@@ -42,33 +31,75 @@ def get_auto_broadcast_ip():
 
     return "255.255.255.255"
 
+
 class HapticNotifier:
     def __init__(self):
         self._enabled = False
         self.broadcast_ip = get_auto_broadcast_ip()
+        self.last_esp32_ip = None
+        self._running = False
+        self._listener_thread = None
+
         try:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            self._sock.settimeout(0.01)  # non-blocking, timeout sangat singkat
+            self._sock.bind(("", HAPTIC_PORT))
+            self._sock.settimeout(1.0)
             self._enabled = True
-            print(f"[HAPTIC] UDP notifier aktif -> broadcast ke {self.broadcast_ip}:{HAPTIC_PORT}")
+            self._running = True
+
+            # Thread background untuk auto-discover IP ESP32 dari sinyal PING
+            self._listener_thread = threading.Thread(
+                target=self._listen_heartbeat, daemon=True, name="HapticHeartbeat"
+            )
+            self._listener_thread.start()
+
+            print(f"[HAPTIC] UDP notifier aktif (Auto-Discovery) -> Broadcast: {self.broadcast_ip}:{HAPTIC_PORT}")
         except Exception as e:
             print(f"[HAPTIC WARNING] Gagal inisialisasi UDP socket: {e}. Modul getar dinonaktifkan.")
 
+    def _listen_heartbeat(self):
+        """Mendengarkan sinyal PING berkala dari ESP32 untuk mencatat IP Aslinya (Direct IP)."""
+        while self._running:
+            try:
+                data, addr = self._sock.recvfrom(64)
+                if data and b"PING" in data:
+                    sender_ip = addr[0]
+                    if sender_ip != self.last_esp32_ip:
+                        self.last_esp32_ip = sender_ip
+                        print(f"[HAPTIC] 🎯 ESP32 terdeteksi di Direct IP: {self.last_esp32_ip}")
+            except socket.timeout:
+                continue
+            except Exception:
+                break
+
     def notify(self):
         """
-        Kirim sinyal ke ESP32 untuk memicu getaran 1x.
-        Dipanggil ketika audio bacaan state sholat selesai diputar.
+        Kirim sinyal getar 'DONE' ke ESP32.
+        Terkirim ganda (Dual Send):
+        1. Via Direct IP (jika terdeteksi dari PING -> tembus WiFi Kampus/Enterprise)
+        2. Via Broadcast IP (untuk Hotspot HP / Router Biasa)
         """
         if not self._enabled:
             return
+
+        # 1. Kirim Direct ke IP ESP32 jika terdaftar (Bypass AP Isolation WiFi Kampus)
+        if self.last_esp32_ip:
+            try:
+                self._sock.sendto(b"DONE", (self.last_esp32_ip, HAPTIC_PORT))
+            except Exception:
+                pass
+
+        # 2. Kirim via Broadcast (untuk Hotspot HP)
         try:
             self._sock.sendto(b"DONE", (self.broadcast_ip, HAPTIC_PORT))
         except Exception:
-            pass  # silent fail — tidak mengganggu program utama
+            pass
 
     def stop(self):
-        """Tutup socket saat program ditutup."""
+        """Tutup socket dan thread saat program ditutup."""
+        self._running = False
         if self._enabled:
             try:
                 self._sock.close()
