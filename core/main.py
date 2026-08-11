@@ -128,16 +128,25 @@ class AudioPlayer:
         return interrupted
                 
     @staticmethod
-    def _find_player():
-        """Mencari audio player yang tersedia di sistem."""
-        for player in ["aplay", "paplay", "ffplay", "mpg123"]:
+    def _find_player(candidates=("aplay", "paplay", "ffplay", "mpg123")):
+        """Mencari audio player yang tersedia di sistem, dari daftar kandidat
+        yang diberikan (default: player untuk WAV)."""
+        for player in candidates:
             result = subprocess.run(["which", player], capture_output=True, text=True)
             if result.returncode == 0:
                 return player.strip()
         return None
 
     def _worker(self):
+        # Player default (aplay/paplay) dipilih sekali di sini untuk semua
+        # bacaan .WAV — ini yang mayoritas dan paling sensitif ke latensi
+        # (dipicu tepat waktu oleh state machine gerakan sholat).
         player = self._find_player()
+        # aplay/paplay TIDAK bisa decode mp3 (mis. doa.mp3, bukan bagian dari
+        # bacaan gerakan) — perlu player compressed-audio terpisah, dicari
+        # baru saat file mp3 pertama benar-benar mau diputar (lazy, supaya
+        # tidak menambah subprocess `which` di startup kalau tidak dipakai).
+        mp3_player = None
         if player:
             print(f"[AUDIO] Menggunakan player: {player}")
         else:
@@ -163,12 +172,27 @@ class AudioPlayer:
                 if delay > 0:
                     time.sleep(delay)
 
+                is_mp3 = filepath.lower().endswith(".mp3")
+
                 if sys.platform.startswith("win"):
                     import winsound
                     winsound.PlaySound(filepath, winsound.SND_FILENAME)
                 elif sys.platform.startswith("darwin"):
                     self.active_process = subprocess.Popen(["afplay", filepath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     self.active_process.wait()
+                elif is_mp3:
+                    if mp3_player is None:
+                        mp3_player = self._find_player(("mpg123", "ffplay")) or ""
+                    if mp3_player == "mpg123":
+                        cmd = ["mpg123", "-q", filepath]
+                    elif mp3_player == "ffplay":
+                        cmd = ["ffplay", "-nodisp", "-autoexit", filepath]
+                    else:
+                        cmd = None
+                        print(f"[AUDIO WARNING] Tidak ada player mp3 (mpg123/ffplay) — {os.path.basename(filepath)} dilewati.")
+                    if cmd:
+                        self.active_process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        self.active_process.wait()
                 elif player:
                     if player == "ffplay":
                         cmd = ["ffplay", "-nodisp", "-autoexit", filepath]
@@ -1454,6 +1478,17 @@ class GemaImamApp:
                                 print(f"[BT] ⚠️  Gagal ganti speaker ke {mac}: {msg}")
                         import threading
                         threading.Thread(target=_switch_bt, daemon=True, name="BtSwitchWeb").start()
+
+                    # Cek apakah guru minta putar Dzikir & Doa Penutup dari
+                    # Web LMS. Sengaja hanya dicek di sini (standby, bukan
+                    # selagi sesi ACTIVE direkam) — server hanya menyertakan
+                    # doa_requested pada balasan idle (lihat
+                    # src/app/api/iot/status/route.ts di repo lms), justru
+                    # supaya tidak menyela antrean audio bacaan gerakan yang
+                    # real-time kalau tombolnya kepencet di tengah sesi.
+                    if status_data.get("doa_requested"):
+                        print("[WEB LMS] Guru meminta putar Dzikir & Doa Penutup.")
+                        self.audio_player.play("doa.mp3")
 
                     # 3. Mode Standby
                     if HAS_DISPLAY:
