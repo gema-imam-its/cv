@@ -421,10 +421,6 @@ class TelegramCommandListener:
             self._cmd_sholat(args)
         elif command == "/log":
             self._cmd_log()
-        elif command == "/bt":
-            self._cmd_bt(args)
-        elif command == "/audio":
-            self._cmd_audio(args)
         elif command == "/wifi":
             self._cmd_wifi(args)
         else:
@@ -458,13 +454,8 @@ class TelegramCommandListener:
             "`/sholat <nama>`       — Ganti sholat aktif\n"
             "  Pilihan: subuh, dhuhur, ashar, maghrib, isya\n"
             "\n"
-            "*── Audio & Network ──*\n"
-            "`/bt <MAC_ADDRESS>`    — Ganti speaker Bluetooth\n"
-            "  Contoh: `/bt B8:F6:53:XX:XX:XX`\n"
-            "`/audio jack`          — Output ke speaker kabel (3.5mm/HDMI)\n"
-            "`/audio bt`            — Output ke speaker Bluetooth\n"
-            "`/audio list`          — Lihat semua sink audio\n"
-            "`/wifi`                — Pindai jaringan WiFi terdekat\n"
+            "*── Network ──*\n"
+            "`/wifi`                — Status WiFi & daftar jaringan terdekat\n"
             "`/wifi <SSID> <PASS>`  — Hubungkan Orange Pi ke WiFi baru\n"
             "\n"
             "*── Log & Info ──*\n"
@@ -687,122 +678,24 @@ class TelegramCommandListener:
         except Exception as e:
             self._reply(f"Error saat mengambil log: {e}")
 
-    def _cmd_bt(self, args):
-        """Ganti speaker Bluetooth aktif saat runtime tanpa merestart program."""
-        if not args:
-            self._reply(
-                "Format salah. Gunakan:\n"
-                "`/bt B8:F6:53:XX:XX:XX`\n\n"
-                "Cara mendapatkan MAC Address:\n"
-                "Jalankan `bluetoothctl devices` di terminal Orange Pi."
-            )
-            return
-
-        new_mac = args[0].upper()
-        # Validasi format MAC address sederhana (AA:BB:CC:DD:EE:FF)
-        import re
-        if not re.match(r'^([0-9A-F]{2}:){5}[0-9A-F]{2}$', new_mac):
-            self._reply(
-                f"Format MAC Address `{new_mac}` tidak valid.\n"
-                "Contoh format yang benar: `B8:F6:53:1A:2B:3C`"
-            )
-            return
-
-        self._reply(f"Menghubungkan ke speaker Bluetooth `{new_mac}`...")
-
-        def _do_connect():
-            ok, msg = connect_bluetooth(new_mac)
-            if ok:
-                self._reply(
-                    f"Speaker Bluetooth berhasil diganti!\n"
-                    f"MAC Aktif: `{new_mac}`\n"
-                    "Audio akan otomatis diarahkan ke speaker baru."
-                )
-            else:
-                self._reply(
-                    f"Gagal terhubung ke `{new_mac}`.\n"
-                    f"Detail: {msg}\n\n"
-                    "Pastikan speaker sudah dinyalakan dan dalam jangkauan Bluetooth Orange Pi."
-                )
-
-        import threading
-        threading.Thread(target=_do_connect, daemon=True, name="BtSwitch").start()
-
-    def _cmd_audio(self, args):
-        """Switch output audio antara speaker kabel (jack) dan Bluetooth via PulseAudio."""
-        import subprocess
-
-        if not args or args[0] not in ("jack", "bt", "list"):
-            self._reply(
-                "Format salah. Pilihan:\n"
-                "/audio jack   — output ke speaker kabel (3.5mm / HDMI / USB)\n"
-                "/audio bt     — output ke speaker Bluetooth\n"
-                "/audio list   — tampilkan semua sink audio yang tersedia"
-            )
-            return
-
-        mode = args[0]
-
-        # Mode list: tampilkan semua sink tanpa mengubah apapun
-        if mode == "list":
-            try:
-                result = subprocess.run(
-                    ["pactl", "list", "short", "sinks"],
-                    capture_output=True, text=True, timeout=5
-                )
-                sinks = result.stdout.strip()
-                if not sinks:
-                    self._reply("Tidak ada sink audio yang terdeteksi.")
-                    return
-                # Format output agar mudah dibaca di Telegram
-                lines = []
-                for line in sinks.splitlines():
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        lines.append(f"• `{parts[1]}`")
-                self._reply(
-                    "🔊 Sink audio tersedia di Orange Pi:\n" +
-                    "\n".join(lines) +
-                    "\n\nGunakan `/audio jack` atau `/audio bt` untuk berpindah."
-                )
-            except FileNotFoundError:
-                self._reply("pactl tidak ditemukan. PulseAudio/PipeWire belum terinstall?")
-            except Exception as e:
-                self._reply(f"Gagal mengambil daftar sink: `{e}`")
-            return
-
-        # Mode jack atau bt: jalankan di background agar tidak blokir polling
-        mode_label = "kabel (jack/HDMI/USB)" if mode == "jack" else "Bluetooth"
-        self._reply(f"Mengalihkan audio ke {mode_label}...")
-
-        def _do_switch(m=mode, label=mode_label):
-            ok, result = switch_audio_sink(m)
-            if ok:
-                self._reply(
-                    f"✅ Audio berhasil dialihkan ke {label}!\n"
-                    f"Sink aktif: `{result}`\n"
-                    "Semua audio yang sedang diputar sudah dipindahkan ke output baru."
-                )
-            else:
-                self._reply(
-                    f"❌ Gagal mengalihkan ke {label}.\n"
-                    f"Detail:\n`{result}`\n\n"
-                    "Coba `/audio list` untuk melihat sink yang tersedia."
-                )
-
-        import threading
-        threading.Thread(target=_do_switch, daemon=True, name="AudioSwitch").start()
-
     def _cmd_wifi(self, args):
         """Ganti koneksi WiFi Orange Pi 4 Pro atau scan WiFi terdekat."""
         import subprocess
         import threading
 
         if not args or args[0].lower() in ("scan", "list"):
-            self._reply("🔍 Memindai jaringan WiFi terdekat di sekitar Orange Pi...")
-
             def _do_scan():
                 try:
+                    import subprocess
+                    # Ambil SSID WiFi yang sedang aktif
+                    cur_res = subprocess.run(
+                        ["iwgetid", "-r"],
+                        capture_output=True, text=True, timeout=3
+                    )
+                    current_ssid = cur_res.stdout.strip() or "(tidak terhubung)"
+
+                    self._reply(f"📡 *WiFi Aktif:* `{current_ssid}`\n\n🔍 Memindai jaringan terdekat...")
+
                     res = subprocess.run(
                         ["nmcli", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list", "--rescan", "yes"],
                         capture_output=True, text=True, timeout=12
@@ -825,10 +718,11 @@ class TelegramCommandListener:
                     formatted.append("`/wifi NamaWiFi PasswordWiFi`")
                     self._reply("\n".join(formatted))
                 except FileNotFoundError:
-                    self._reply("⚠️ `nmcli` (NetworkManager) tidak ditemukan di Orange Pi.")
+                    self._reply("⚠️ `nmcli` atau `iwgetid` tidak ditemukan di Orange Pi.")
                 except Exception as e:
                     self._reply(f"⚠️ Gagal memindai WiFi: `{e}`")
 
+            import threading
             threading.Thread(target=_do_scan, daemon=True, name="WifiScan").start()
             return
 
