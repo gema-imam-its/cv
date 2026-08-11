@@ -364,10 +364,9 @@ class TelegramCommandListener:
         if not message:
             return
 
-        # Hanya proses pesan dari chat_id yang diotorisasi
         chat_id = str(message.get("chat", {}).get("id", ""))
-        if chat_id != str(self._chat_id):
-            return
+        user_info = message.get("from", {})
+        username = user_info.get("username") or user_info.get("first_name") or "User"
 
         text = (message.get("text") or "").strip()
         if not text.startswith("/"):
@@ -378,7 +377,30 @@ class TelegramCommandListener:
         command = parts[0].lower()
         args = parts[1:]
 
-        print(f"[TELEGRAM CMD] Perintah diterima: {text}")
+        # 1. Perintah /id atau /myid selalu diizinkan untuk SIAPAPUN (bahkan jika belum terdaftar di .env)
+        if command in ("/id", "/myid"):
+            msg = (
+                f"🆔 *ID Telegram Anda:* `{chat_id}`\n\n"
+                f"👤 Pengguna: *{username}*\n\n"
+                "Salin & berikan ID di atas ke admin untuk dimasukkan ke file `.env` agar mendapatkan akses kontrol GEMA Imam."
+            )
+            send_telegram_message(msg, chat_id=chat_id)
+            print(f"[TELEGRAM ACCESS] User '{username}' (Chat ID: {chat_id}) mengechat /id.")
+            return
+
+        # 2. Cek otorisasi untuk perintah lainnya (dukung multi-chat ID dipisahkan koma di .env)
+        authorized_ids = [c.strip() for c in str(self._chat_id or "").replace(";", ",").split(",") if c.strip()]
+        if chat_id not in authorized_ids:
+            msg = (
+                f"⛔ *Akses Ditolak*\n\n"
+                f"ID Telegram Anda (`{chat_id}`) belum terdaftar di file `.env` GEMA Imam.\n\n"
+                "Ketik /id untuk melihat ID Anda dan berikan ke admin."
+            )
+            send_telegram_message(msg, chat_id=chat_id)
+            print(f"[TELEGRAM WARNING] Perintah '{command}' ditolak dari user '{username}' (Chat ID: {chat_id}).")
+            return
+
+        print(f"[TELEGRAM CMD] Perintah diterima dari '{username}' ({chat_id}): {text}")
 
         if command == "/help":
             self._cmd_help()
@@ -442,6 +464,7 @@ class TelegramCommandListener:
             "`/wifi <SSID> <PASS>`  — Hubungkan Orange Pi ke WiFi baru\n"
             "\n"
             "*── Log & Info ──*\n"
+            "`/id`                  — Lihat ID Telegram Anda\n"
             "`/log`                 — Kirim file log sesi terakhir\n"
             "`/help`                — Tampilkan pesan ini"
         )
