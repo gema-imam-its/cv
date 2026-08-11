@@ -402,6 +402,9 @@ class TelegramCommandListener:
 
         print(f"[TELEGRAM CMD] Perintah diterima dari '{username}' ({chat_id}): {text}")
 
+        # Simpan chat_id pengirim agar _reply() merespons ke pengirim yang benar
+        self._current_chat_id = chat_id
+
         if command == "/help":
             self._cmd_help()
         elif command in ("/mulai", "/start"):
@@ -430,8 +433,9 @@ class TelegramCommandListener:
             )
 
     def _reply(self, text):
-        """Kirim balasan ke chat yang diotorisasi."""
-        send_telegram_message(text, chat_id=self._chat_id)
+        """Kirim balasan ke pengirim command (bukan selalu ke pemilik bot)."""
+        target = getattr(self, "_current_chat_id", None) or self._chat_id
+        send_telegram_message(text, chat_id=target)
 
     # ──────────────────────────────────────────────
     # Implementasi setiap command
