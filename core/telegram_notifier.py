@@ -687,12 +687,16 @@ class TelegramCommandListener:
             def _do_scan():
                 try:
                     import subprocess
-                    # Ambil SSID WiFi yang sedang aktif
+                    # Ambil SSID WiFi yang sedang aktif via nmcli
                     cur_res = subprocess.run(
-                        ["iwgetid", "-r"],
+                        ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
                         capture_output=True, text=True, timeout=3
                     )
-                    current_ssid = cur_res.stdout.strip() or "(tidak terhubung)"
+                    current_ssid = "(tidak terhubung)"
+                    for line in cur_res.stdout.splitlines():
+                        if line.startswith("yes:"):
+                            current_ssid = line.split(":", 1)[1].strip()
+                            break
 
                     self._reply(f"📡 *WiFi Aktif:* `{current_ssid}`\n\n🔍 Memindai jaringan terdekat...")
 
@@ -718,7 +722,7 @@ class TelegramCommandListener:
                     formatted.append("`/wifi NamaWiFi PasswordWiFi`")
                     self._reply("\n".join(formatted))
                 except FileNotFoundError:
-                    self._reply("⚠️ `nmcli` atau `iwgetid` tidak ditemukan di Orange Pi.")
+                    self._reply("⚠️ `nmcli` (NetworkManager) tidak ditemukan di Orange Pi.")
                 except Exception as e:
                     self._reply(f"⚠️ Gagal memindai WiFi: `{e}`")
 

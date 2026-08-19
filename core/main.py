@@ -76,10 +76,10 @@ def get_cpu_temp():
 
 # Daftar file audio bacaan sholat yang wajib/sunnah diselesaikan (jika terpotong dianggap kesalahan Imam)
 READING_AUDIOS = {
-    "alfatihah.WAV", "al-ikhlas.WAV", "al-falaq.WAV", "an-nas.WAV", 
-    "al-kautsar.WAV", "an-nasr.WAV", "ruku.WAV", "itidal.WAV",
+    "alfatihah.WAV", "al-ikhlas.WAV", "al-falaq.WAV", "an-nas.WAV",
+    "an-nasr.WAV", "ruku.WAV", "itidal.WAV",
     "sujud.WAV", "iftirasy.WAV", "tasyahud-awal.WAV", "tasyahud-akhir.WAV",
-    "iftitah.WAV", "qunut.WAV", "iqomah.WAV"
+    "iftitah.WAV", "iqomah.WAV"
 }
 
 class AudioPlayer:
@@ -1001,7 +1001,7 @@ class GemaImamApp:
         
         # Buat daftar surat pendek acak untuk sesi sholat ini
         # Kumpulkan semua surat pendek yang ada di folder audio
-        available_surahs = ["al-ikhlas.WAV", "al-falaq.WAV", "an-nas.WAV", "al-kautsar.WAV", "an-nasr.WAV"]
+        available_surahs = ["al-ikhlas.WAV", "al-falaq.WAV", "an-nas.WAV", "an-nasr.WAV"]
         random.shuffle(available_surahs)
         self._session_surahs = available_surahs
         print(f"[AUDIO] Surat pendek yang akan dibaca (acak): {self._session_surahs[:2]}")
