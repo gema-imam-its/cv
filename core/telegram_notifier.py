@@ -560,8 +560,8 @@ class TelegramCommandListener:
             app.haptic.notify()
             self._reply(
                 "📳 *Sinyal Tes Getar Terkirim!*\n"
-                "Paket UDP 'DONE' telah di-broadcast.\n"
-                "Jika gelang ESP32 terhubung di jaringan yang sama, motor akan bergetar 300ms."
+                "Paket UDP 'DONE' telah dikirim.\n"
+                "Jika gelang ESP32 terhubung, motor akan bergetar 2x (audio selesai)."
             )
             print("[TELEGRAM CMD] /getar dieksekusi.")
         else:

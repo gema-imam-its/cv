@@ -1213,6 +1213,9 @@ class GemaImamApp:
                                     transition_info = self.state_machine.update(last_classified_pose, last_features)
                                 
                             if transition_info:
+                                # Kirim sinyal 1x getar ke ESP32 saat masuk ke gerakan baru
+                                self.haptic.notify_start()
+
                                 interrupted_files = self.audio_player.clear()
                                 
                                 for audio_file in interrupted_files:

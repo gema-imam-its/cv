@@ -74,10 +74,9 @@ class HapticNotifier:
             except Exception:
                 break
 
-    def notify(self):
+    def _send(self, payload: bytes):
         """
-        Kirim sinyal getar 'DONE' ke ESP32.
-        Terkirim ganda (Dual Send):
+        Kirim payload UDP ke ESP32 secara ganda (Dual Send):
         1. Via Direct IP (jika terdeteksi dari PING -> tembus WiFi Kampus/Enterprise)
         2. Via Broadcast IP (untuk Hotspot HP / Router Biasa)
         """
@@ -87,15 +86,31 @@ class HapticNotifier:
         # 1. Kirim Direct ke IP ESP32 jika terdaftar (Bypass AP Isolation WiFi Kampus)
         if self.last_esp32_ip:
             try:
-                self._sock.sendto(b"DONE", (self.last_esp32_ip, HAPTIC_PORT))
+                self._sock.sendto(payload, (self.last_esp32_ip, HAPTIC_PORT))
             except Exception:
                 pass
 
         # 2. Kirim via Broadcast (untuk Hotspot HP)
         try:
-            self._sock.sendto(b"DONE", (self.broadcast_ip, HAPTIC_PORT))
+            self._sock.sendto(payload, (self.broadcast_ip, HAPTIC_PORT))
         except Exception:
             pass
+
+    def notify_start(self):
+        """
+        Kirim sinyal 'START' (1x getar) saat masuk ke pose/gerakan baru.
+        """
+        self._send(b"START")
+
+    def notify(self):
+        """
+        Kirim sinyal 'DONE' (2x getar) saat audio bacaan selesai diputar.
+        """
+        self._send(b"DONE")
+
+    def notify_done(self):
+        """Alias untuk notify()."""
+        self._send(b"DONE")
 
     def stop(self):
         """Tutup socket dan thread saat program ditutup."""
