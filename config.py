@@ -42,7 +42,7 @@ HARDWARE_PROFILES = {
         "skip_frame":        1,      # proses 1 dari 2 frame (frame skipping)
         "camera_rotation":   270,   # Rotasi kamera: None, 90, 180, atau 270 (dalam derajat CW)
         "min_detection_conf": 0.6,   # sedikit diturunkan untuk toleransi
-        "min_tracking_conf":  0.6,
+        "min_tracking_conf":  0.75,
     },
 }
 

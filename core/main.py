@@ -1126,6 +1126,19 @@ class GemaImamApp:
                     last_results = self.pose_detector.process(img_rgb)
                     
                     if last_results.pose_landmarks:
+                        # ── SOLUSI A: FILTER UKURAN IMAM (Shoulder Size Filter) ──
+                        # Imam selalu lebih dekat ke kamera → bahu lebih lebar di frame.
+                        # Jika jarak bahu kiri-kanan < 12% lebar frame, kemungkinan besar
+                        # ini adalah makmum di belakang imam → abaikan deteksi ini.
+                        lm = last_results.pose_landmarks.landmark
+                        _sh_l_x = lm[self.mp_pose.PoseLandmark.LEFT_SHOULDER].x
+                        _sh_r_x = lm[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].x
+                        _shoulder_width = abs(_sh_r_x - _sh_l_x)
+                        if _shoulder_width < 0.11:
+                            # Deteksi terlalu kecil → bukan imam → lewati frame ini
+                            self._no_imam_frames += 1
+                            continue
+
                         # Terapkan filter smoothing (EMA) pada landmark
                         self.landmark_smoother.smooth(last_results.pose_landmarks)
                         
